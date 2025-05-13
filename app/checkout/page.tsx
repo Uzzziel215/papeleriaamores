@@ -1,12 +1,14 @@
-import Image from "next/image"
-import Link from "next/link"
-import { ChevronLeft, CreditCard } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import { Breadcrumb } from "@/components/breadcrumb"
-import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
-import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Checkbox } from "@/components/ui/checkbox"
+"use client";
+
+import Image from "next/image";
+import Link from "next/link";
+import { ChevronLeft, CreditCard } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Breadcrumb } from "@/components/breadcrumb";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
+import { Checkbox } from "@/components/ui/checkbox";
 
 // Import necessary hooks and supabase client
 import { useState } from 'react';
@@ -17,8 +19,8 @@ import { useToast } from '@/components/ui/use-toast';
 import { supabase } from '@/lib/supabase';
 
 export default function CheckoutPage() {
-  // Get cart state and actions
-  const { items, carritoId, clearCart } = useCart();
+  // Get cart state and actions, including isLoading from useCart
+  const { items, carritoId, clearCart, isLoading: isLoadingCart } = useCart();
   // Get auth state, including isLoading
   const { user, isLoading: isLoadingAuth } = useAuth();
   // Get toast function
@@ -26,12 +28,23 @@ export default function CheckoutPage() {
   // Get router for navigation
   const router = useRouter();
 
-  // State for loading and terms acceptance
+  // State for local loading (during order placement) and terms acceptance
   const [isLoading, setIsLoading] = useState(false);
   const [termsAccepted, setTermsAccepted] = useState(false);
 
   // Function to handle the simulated order placement
   const handlePlaceOrder = async () => {
+    // Safety check: Return early if carritoId is not available yet
+    if (!carritoId) {
+      console.error("handlePlaceOrder called before carritoId was available.");
+      toast({
+        title: "Error del Carrito",
+        description: "La información del carrito aún no está cargada. Inténtalo de nuevo.",
+        variant: "destructive",
+      });
+      return; // Stop execution if carritoId is null or undefined
+    }
+
     // Return early if auth state is still loading or user is not authenticated
     if (isLoadingAuth || !user) {
       if (!user && !isLoadingAuth) { // Only show toast if loading is finished and user is null
@@ -69,32 +82,58 @@ export default function CheckoutPage() {
     try {
       // Call the Supabase RPC function
       // Pass carritoId, and NULL for shipping_address_id_input and order_notes_input for now
-      const { data: newOrderId, error } = await supabase.rpc('place_simulated_order', {
-        cart_id_input: carritoId,
-        shipping_address_id_input: null, // Replace with selected address ID when implemented
-        order_notes_input: null, // Replace with order notes when implemented
-      });
+      // const { data: newOrderId, error } = await supabase.rpc('place_simulated_order', {
+      //   cart_id_input: carritoId,
+      //   shipping_address_id_input: null, // Replace with selected address ID when implemented
+      //   order_notes_input: null, // Replace with order notes when implemented
+      // });
 
-      if (error) {
-        console.error("Error calling place_simulated_order RPC:", error);
+      // --- Reemplazar la llamada a supabase.rpc(...) con esta inserción ---
+      const { data: insertData, error: insertError } = await supabase
+        .from('ordenes_pendientes_trigger')
+        .insert([
+          {
+            cart_id_input: carritoId, // Usamos el ID del carrito del contexto
+            shipping_address_id_input: null, // Usamos la dirección seleccionada - Placeholder por ahora
+            order_notes_input: null, // Usamos las notas del pedido - Placeholder por ahora
+          },
+        ]);
+      // --- Fin del reemplazo --- 
+
+      if (insertError) {
+        console.error("Error inserting into ordenes_pendientes_trigger:", insertError);
+        // Aquí puedes manejar el error, por ejemplo, mostrando un mensaje al usuario
         toast({
-          title: "Error al procesar tu pedido",
-          description: error.message, // Display the error message from the RPC
+          title: "Error al iniciar el pedido",
+          description: insertError.message || "No pudimos procesar tu solicitud. Inténtalo de nuevo.",
           variant: "destructive",
         });
+        return; // Detener el proceso si la inserción falla
       } else {
-        console.log("Order placed successfully with ID:", newOrderId);
+         // Si la inserción fue exitosa, el trigger ya llamó o llamará a place_simulated_order.
+         // La lógica para limpiar el carrito y mostrar éxito ahora debería estar dentro
+         // de place_simulated_order (que ya tienes), o deberías manejar la confirmación
+         // del pedido de otra manera (por ejemplo, verificando si se creó un pedido
+         // asociado a este usuario en la tabla 'pedidos' poco después).
+         // Para una confirmación inmediata simulada en el frontend, puedes asumir éxito
+         // si la inserción en ordenes_pendientes_trigger fue exitosa.
+
+        console.log("Pedido simulado iniciado via trigger. Inserted:", insertData);
+
+        // Show success toast
         toast({
-          title: "Pedido Confirmado",
-          description: `Tu pedido ha sido procesado exitosamente. ID: ${newOrderId}`,
-          variant: "success",
+          title: "Pedido Iniciado",
+          description: "Tu pedido ha sido recibido y está siendo procesado.",
+          // variant: "success", // If you have a success style
         });
 
-        // Clear the local cart state after successful order
-        clearCart();
+        // Redirect to the order success page
+        router.push('/checkout/success');
 
-        // Redirect to order history or confirmation page
-        router.push('/cuenta/pedidos'); // Adjust the redirection path as needed
+        // Optional: Clear the local cart state immediately after successful initiation
+        // The trigger function in the database should also clear the cart items,
+        // but clearing locally provides immediate feedback.
+        clearCart();
       }
 
     } catch (error: any) {
@@ -108,6 +147,15 @@ export default function CheckoutPage() {
       setIsLoading(false);
     }
   };
+
+  console.log("--- Estado de variables para botón deshabilitado ---");
+  console.log("isLoading:", isLoading);
+  console.log("items.length:", items.length);
+  console.log("isLoadingAuth:", isLoadingAuth);
+  console.log("user:", user);
+  console.log("termsAccepted:", termsAccepted);
+  console.log("carritoId:", carritoId);
+  console.log("isLoadingCart (from useCart):", isLoadingCart);
 
   return (
     <div className="min-h-screen bg-[#f5f8ff]">
@@ -449,7 +497,7 @@ export default function CheckoutPage() {
                 <Button
                   className="bg-[#0084cc] hover:bg-[#006ba7] text-white w-full py-6 rounded-full text-lg mb-4"
                   onClick={handlePlaceOrder}
-                  disabled={isLoading || items.length === 0 || isLoadingAuth || !user || !termsAccepted} // Disable based on state
+                  disabled={isLoadingCart || isLoading || items.length === 0 || !termsAccepted}
                 >
                   {isLoading ? 'Procesando...' : 'Confirmar Pedido'} 
                 </Button>

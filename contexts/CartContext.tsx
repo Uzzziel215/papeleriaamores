@@ -25,6 +25,7 @@ type CartContextType = {
   clearCart: () => Promise<void>
   isLoading: boolean
   totalItems: number
+  carritoId: string | null // Expose carritoId
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined)
@@ -93,7 +94,8 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
           if (anonCartError) {
             console.error("initCart: Error searching for anonymous cart:", anonCartError)
-             setItems([]); // Clear items on error
+            setCarritoId(null); // Ensure carritoId is null on error
+            setItems([]); // Clear items on error
             return
           }
 
@@ -115,6 +117,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             if (createAnonError) {
               console.error("initCart: Error creating anonymous cart:", createAnonError)
+              setCarritoId(null); // Ensure carritoId is null on error
                setItems([]); // Clear items on error
               return
             }
@@ -152,6 +155,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
           if (userCartError) {
             console.error("initCart: Error searching for user cart:", userCartError)
+            setCarritoId(null); // Ensure carritoId is null on error
              setItems([]); // Clear items on error
             return
           }
@@ -283,7 +287,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                  .is("usuario_id", null)
                  .maybeSingle();
 
-               if(convertCartError) { console.error("initCart: Error fetching anonymous cart for conversion:", convertCartError); }
+               if(convertCartError) {
+                 console.error("initCart: Error fetching anonymous cart for conversion:", convertCartError);
+                 setCarritoId(null); // Ensure carritoId is null on error
+                 setItems([]); // Clear items on error
+               }
 
                if(anonCartToConvert) {
                   console.log("initCart: Converting anonymous cart to user cart:", anonCartToConvert);
@@ -296,6 +304,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                  if(updateCartError) {
                    console.error("initCart: Error converting anonymous cart:", updateCartError);
                     setItems([]); // Clear items on error
+                    setCarritoId(null); // Ensure carritoId is null on error
                  } else {
                    console.log("initCart: Anonymous cart converted successfully.");
                    setCarritoId(anonCartToConvert.id);
@@ -318,6 +327,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                  if (createError) {
                    console.error("initCart: Error creating user cart:", createError)
                     setItems([]); // Clear items on error
+                    setCarritoId(null); // Ensure carritoId is null on error
                  } else {
                    console.log("initCart: Created new user cart:", newUserCart);
                    setCarritoId(newUserCart.id)
@@ -333,6 +343,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
       } catch (error) {
         console.error("Caught exception in initCart:", error)
+        setCarritoId(null); // Ensure carritoId is null on exception
          setItems([]); // Clear items on exception
       } finally {
         isInitializing.current = false; // Reset ref at the end
@@ -663,6 +674,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
     clearCart,
     isLoading, // This reflects the initialization loading state
     totalItems,
+    carritoId // Expose carritoId
   }
 
   return <CartContext.Provider value={value}>{children}</CartContext.Provider>

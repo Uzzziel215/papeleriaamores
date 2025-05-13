@@ -19,11 +19,8 @@ export async function middleware(req: NextRequest) {
   // Now, verify if the user is authenticated after ensuring the session is refreshed.
   const { data: { session }, error: sessionError } = await supabase.auth.getSession(); // Capture error as well
 
-  // Log the result of getSession()
-  console.log("Result of supabase.auth.getSession() in middleware:", { session, sessionError });
-
   // Rutas protegidas que requieren autenticación
-  const protectedRoutes = ["/cuenta", "/cuenta/pedidos", "/cuenta/favoritos", "/checkout"];
+  const protectedRoutes = ["/cuenta", "/cuenta/pedidos", "/cuenta/favoritos"]; // Exclude /checkout temporarily
 
   // Verificar si la ruta actual está protegida
   const isProtectedRoute = protectedRoutes.some((route) => req.nextUrl.pathname.startsWith(route));
@@ -42,7 +39,7 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If the user is authenticated and tries to access login/register, redirect to home
+  // If the user is authenticated and tries to access login/register, redirect to account
   if (isOnAuthPage && session) {
      console.log("Middleware: Authenticated user on auth page, redirecting to home."); // Log this redirect
     return NextResponse.redirect(new URL("/", req.url)); // Redirect to home page instead of account
