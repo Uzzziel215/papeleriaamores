@@ -1,577 +1,189 @@
-import Image from "next/image"
-import Link from "next/link"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Button } from "@/components/ui/button"
-import { Breadcrumb } from "@/components/breadcrumb"
-import { User, Package, Heart, CreditCard, LogOut, ShoppingBag, Clock, Check, Search } from "lucide-react"
+'use client';
 
-export default function PedidosPage() {
+import { useState, useEffect } from 'react';
+import Link from 'next/link';
+import { supabase } from '@/lib/supabase';
+import { useAuth } from '@/contexts/AuthContext';
+import { Breadcrumb } from '@/components/breadcrumb';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { format } from 'date-fns';
+import { es } from 'date-fns/locale'; // Assuming you need Spanish locale for dates
+import { Separator } from '@/components/ui/separator';
+import { Button } from '@/components/ui/button';
+
+// Define types for Order and OrderItem based on your database schema
+// Assuming 'pedidos' table with id, created_at, estado, total
+// Assuming 'detalles_pedido' table with pedido_id, cantidad, precio_unitario, subtotal, producto_id, variante_id
+// Assuming 'productos' table with id, nombre
+// Assuming 'variantes_producto' table with id, valor (e.g., color, size)
+
+interface OrderItem {
+  cantidad: number;
+  precio_unitario: number;
+  subtotal: number;
+  productos: { // Assuming products relationship is named 'productos'
+    nombre: string;
+  } | null; // Product details might be null if product was deleted
+  variantes: { // Assuming variants relationship is named 'variantes'
+    valor: string | null;
+  } | null; // Variant details might be null
+}
+
+interface Order {
+  id: string;
+  created_at: string; // Supabase returns timestamp strings
+  estado: string; // Should match your estado_pedido ENUM values
+  total: number;
+  detalles_pedido: OrderItem[]; // Assuming the relationship is named 'detalles_pedido'
+}
+
+export default function OrdersPage() {
+  const { user, isLoading: isLoadingUser } = useAuth();
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function fetchOrders() {
+      setIsLoading(true);
+      setError(null);
+
+      if (!user) {
+         // If user is not loaded and not loading, it means they are not logged in
+         if (!isLoadingUser) {
+           setError('Debes iniciar sesión para ver tus pedidos.');
+         }
+         setIsLoading(false);
+         setOrders([]); // Ensure orders are empty if no user
+         return;
+      }
+
+      try {
+        // Fetch orders for the logged-in user
+        const { data: ordersData, error: ordersError } = await supabase
+          .from('pedidos') // Your orders table name
+          .select(\`
+            id,
+            created_at,
+            estado,
+            total,
+            detalles_pedido (
+              cantidad,
+              precio_unitario,
+              subtotal,
+              productos ( nombre ),
+              variantes ( valor )
+            )
+          \`) // Select order details and nested order items with product/variant names
+          .eq('usuario_id', user.id) // Filter by the logged-in user's ID
+          .order('created_at', { ascending: false }); // Order by most recent first
+
+        if (ordersError) {
+          console.error('Error fetching orders:', ordersError);
+          setError(ordersError.message);
+          setOrders([]);
+        } else {
+          setOrders(ordersData as Order[]);
+        }
+      } catch (err: any) {
+        console.error('Caught exception fetching orders:', err);
+        setError('Ocurrió un error inesperado al cargar los pedidos.');
+        setOrders([]);
+      } finally {
+        setIsLoading(false);
+      }
+    }
+
+    // Only fetch if user data is available (not loading and not null)
+    if (!isLoadingUser && user) {
+      fetchOrders();
+    } else if (!isLoadingUser && !user) {
+       // Handle case where user is not logged in after auth loading is complete
+       setIsLoading(false);
+       setError('Debes iniciar sesión para ver tus pedidos.');
+    }
+
+  }, [user, isLoadingUser]); // Depend on user and isLoadingUser to refetch when auth state changes
+
+  // Format date for display
+  const formatOrderDate = (dateString: string) => {
+    try {
+       // Parse date string and format it in Spanish
+       return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: es });
+    } catch (e) {
+       console.error('Error formatting date:', e);
+       return dateString; // Return original string if formatting fails
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f8ff]">
       <div className="max-w-6xl mx-auto px-4 py-8">
         <Breadcrumb
           items={[
-            { label: "Inicio", href: "/" },
-            { label: "Mi Cuenta", href: "/cuenta" },
-            { label: "Mis Pedidos", href: "/cuenta/pedidos", active: true },
+            { label: 'Inicio', href: '/' },
+            { label: 'Cuenta', href: '/cuenta' },
+            { label: 'Pedidos', href: '/cuenta/pedidos', active: true },
           ]}
         />
 
         <h1 className="text-3xl font-bold mb-8">Mis Pedidos</h1>
 
-        <div className="flex flex-col md:flex-row gap-8">
-          {/* Sidebar */}
-          <div className="w-full md:w-64 shrink-0">
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center">
-                  {/* Añadir relative al padre de la imagen */}
-                  <div className="relative w-16 h-16">
-                    <Image src="/avatar-profile.png" alt="Avatar" fill className="rounded-full object-cover" />
-                  </div>
-                  <div className="ml-4">
-                    <h2 className="font-semibold">Laura Martínez</h2>
-                    <p className="text-sm text-gray-500">Cliente desde 2022</p>
-                  </div>
-                </div>
-              </div>
+        {isLoading || isLoadingUser && <p className="text-center">Cargando pedidos...</p>}
+        {error && <p className="text-center text-red-500">{error}</p>}
 
-              <div className="p-4">
-                <nav className="space-y-1">
-                  <Link
-                    href="/cuenta"
-                    className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-md"
-                  >
-                    <User className="h-5 w-5 mr-3" />
-                    <span>Mi Perfil</span>
-                  </Link>
-                  <Link
-                    href="/cuenta/pedidos"
-                    className="flex items-center px-3 py-2 text-[#0084cc] bg-blue-50 rounded-md"
-                  >
-                    <Package className="h-5 w-5 mr-3" />
-                    <span>Mis Pedidos</span>
-                  </Link>
-                  <Link
-                    href="/cuenta/favoritos"
-                    className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-md"
-                  >
-                    <Heart className="h-5 w-5 mr-3" />
-                    <span>Favoritos</span>
-                  </Link>
-                  <Link
-                    href="/cuenta/pagos"
-                    className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-md"
-                  >
-                    <CreditCard className="h-5 w-5 mr-3" />
-                    <span>Métodos de Pago</span>
-                  </Link>
-                  <div className="pt-4 mt-4 border-t border-gray-100">
-                    <button className="flex items-center px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-md w-full text-left">
-                      <LogOut className="h-5 w-5 mr-3" />
-                      <span>Cerrar Sesión</span>
-                    </button>
-                  </div>
-                </nav>
-              </div>
-            </div>
+        {!isLoading && !error && orders.length === 0 && (
+          <div className="text-center">
+             <p className="text-gray-600 mb-4">No has realizado ningún pedido todavía.</p>
+             <Link href="/productos" passHref>
+                <Button className="bg-[#0084cc] hover:bg-[#006ba7]">Explorar Productos</Button>
+             </Link>
           </div>
+        )}
 
-          {/* Main Content */}
-          <div className="flex-1">
-            <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
-              <div className="p-6 border-b border-gray-100">
-                <div className="flex items-center justify-between">
-                  <h2 className="text-xl font-semibold">Historial de Pedidos</h2>
-                  <div className="relative">
-                    <input
-                      type="text"
-                      placeholder="Buscar pedido..."
-                      className="pl-9 pr-4 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#0084cc]"
-                    />
-                    <Search className="absolute left-3 top-2.5 h-4 w-4 text-gray-400" />
-                  </div>
+        <div className="space-y-6">
+          {!isLoading && !error && orders.map((order) => (
+            <Card key={order.id} className="overflow-hidden">
+              <CardHeader className="bg-gray-100/50 flex-row items-center justify-between space-y-0 py-4 px-6">
+                <div>
+                  <CardTitle className="text-lg font-semibold">Pedido #{order.id.substring(0, 8)}</CardTitle> {/* Display truncated ID */}
+                  <CardDescription className="text-sm text-gray-600">{formatOrderDate(order.created_at)}</CardDescription>
                 </div>
-              </div>
-
-              <div className="p-6">
-                <Tabs defaultValue="all">
-                  <TabsList className="grid grid-cols-4 mb-6">
-                    <TabsTrigger value="all">Todos</TabsTrigger>
-                    <TabsTrigger value="processing">En Proceso</TabsTrigger>
-                    <TabsTrigger value="shipped">Enviados</TabsTrigger>
-                    <TabsTrigger value="delivered">Entregados</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="all">
-                    <div className="space-y-6">
-                      {/* Order 1 */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12345</span>
-                              <span className="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Entregado
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 15 de mayo, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-sm">
-                              Repetir Pedido
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <Check className="h-5 w-5 text-green-500 mr-2" />
-                              <span className="text-sm">Entregado el 18 de mayo, 2023</span>
-                            </div>
-                            <span className="font-medium">€47.67</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-notebook.png"
-                                  alt="Cuaderno Espiral Colorido"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Cuaderno Espiral Colorido</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-pens.png"
-                                  alt="Set de Bolígrafos Pastel"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Set de Bolígrafos Pastel</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 2</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-organizer.png"
-                                  alt="Organizador de Escritorio"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Organizador de Escritorio</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Order 2 */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12344</span>
-                              <span className="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                Enviado
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 2 de mayo, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-sm">
-                              Seguimiento
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <Clock className="h-5 w-5 text-blue-500 mr-2" />
-                              <span className="text-sm">Estimado para el 22 de mayo, 2023</span>
-                            </div>
-                            <span className="font-medium">€32.50</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-markers.png"
-                                  alt="Marcadores Acuarelables"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Marcadores Acuarelables</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-planner.png"
-                                  alt="Agenda 2023 Diseño Floral"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Agenda 2023 Diseño Floral</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Order 3 */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12343</span>
-                              <span className="ml-3 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                                En Proceso
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 18 de abril, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-sm text-red-500 border-red-200 hover:bg-red-50"
-                            >
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <ShoppingBag className="h-5 w-5 text-yellow-500 mr-2" />
-                              <span className="text-sm">Preparando pedido</span>
-                            </div>
-                            <span className="font-medium">€21.75</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-colored-pencils.png"
-                                  alt="Set de Lápices de Colores"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Set de Lápices de Colores</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-sticky-notes.png"
-                                  alt="Bloc de Notas Adhesivas"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Bloc de Notas Adhesivas</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 2</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
+                <div className="text-lg font-bold text-[#0084cc]">€{order.total.toFixed(2)}</div>
+              </CardHeader>
+              <CardContent className="p-6">
+                <div className="mb-4">
+                   <h3 className="text-md font-semibold mb-2">Estado: <span className="font-normal text-gray-700">{order.estado}</span></h3>
+                </div>
+                <Separator className="mb-4" />
+                <div className="space-y-4">
+                  {order.detalles_pedido.map((item, itemIndex) => (
+                    <div key={itemIndex} className="flex items-start">
+                       {/* You would typically join with product/variant to show image here */}
+                       {/* Placeholder for item image */}
+                        <div className="w-12 h-12 bg-gray-200 rounded mr-4 flex-shrink-0"></div>
+                       <div className="flex-1">
+                         <p className="text-sm font-medium">{item.productos?.nombre || 'Producto Desconocido'}</p>
+                          {item.variantes?.valor && (
+                              <p className="text-xs text-gray-600">Variante: {item.variantes.valor}</p>
+                          )}
+                         <p className="text-sm text-gray-600">Cantidad: {item.cantidad}</p>
+                          <p className="text-sm font-semibold">€{(item.precio_unitario * item.cantidad).toFixed(2)}</p>
+                       </div>
                     </div>
-                  </TabsContent>
-
-                  <TabsContent value="processing">
-                    <div className="space-y-6">
-                      {/* Order 3 (Processing) */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12343</span>
-                              <span className="ml-3 px-2 py-1 bg-yellow-100 text-yellow-800 text-xs rounded-full">
-                                En Proceso
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 18 de abril, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              className="text-sm text-red-500 border-red-200 hover:bg-red-50"
-                            >
-                              Cancelar
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <ShoppingBag className="h-5 w-5 text-yellow-500 mr-2" />
-                              <span className="text-sm">Preparando pedido</span>
-                            </div>
-                            <span className="font-medium">€21.75</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-colored-pencils.png"
-                                  alt="Set de Lápices de Colores"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Set de Lápices de Colores</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-sticky-notes.png"
-                                  alt="Bloc de Notas Adhesivas"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Bloc de Notas Adhesivas</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 2</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="shipped">
-                    <div className="space-y-6">
-                      {/* Order 2 (Shipped) */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12344</span>
-                              <span className="ml-3 px-2 py-1 bg-blue-100 text-blue-800 text-xs rounded-full">
-                                Enviado
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 2 de mayo, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-sm">
-                              Seguimiento
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <Clock className="h-5 w-5 text-blue-500 mr-2" />
-                              <span className="text-sm">Estimado para el 22 de mayo, 2023</span>
-                            </div>
-                            <span className="font-medium">€32.50</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-markers.png"
-                                  alt="Marcadores Acuarelables"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Marcadores Acuarelables</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-planner.png"
-                                  alt="Agenda 2023 Diseño Floral"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Agenda 2023 Diseño Floral</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="delivered">
-                    <div className="space-y-6">
-                      {/* Order 1 (Delivered) */}
-                      <div className="border border-gray-200 rounded-lg overflow-hidden">
-                        <div className="bg-gray-50 p-4 flex flex-col md:flex-row md:items-center md:justify-between">
-                          <div>
-                            <div className="flex items-center">
-                              <span className="font-medium">Pedido #PA-12345</span>
-                              <span className="ml-3 px-2 py-1 bg-green-100 text-green-800 text-xs rounded-full">
-                                Entregado
-                              </span>
-                            </div>
-                            <div className="text-sm text-gray-500 mt-1">Realizado el 15 de mayo, 2023</div>
-                          </div>
-
-                          <div className="flex items-center mt-3 md:mt-0">
-                            <Button variant="outline" size="sm" className="text-sm mr-2">
-                              Ver Detalles
-                            </Button>
-                            <Button variant="outline" size="sm" className="text-sm">
-                              Repetir Pedido
-                            </Button>
-                          </div>
-                        </div>
-
-                        <div className="p-4 border-t border-gray-200">
-                          <div className="flex items-center justify-between mb-4">
-                            <div className="flex items-center">
-                              <Check className="h-5 w-5 text-green-500 mr-2" />
-                              <span className="text-sm">Entregado el 18 de mayo, 2023</span>
-                            </div>
-                            <span className="font-medium">€47.67</span>
-                          </div>
-
-                          <div className="flex flex-wrap gap-4">
-                            <div className="flex items-center">
-                              {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-notebook.png"
-                                  alt="Cuaderno Espiral Colorido"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Cuaderno Espiral Colorido</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-pens.png"
-                                  alt="Set de Bolígrafos Pastel"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Set de Bolígrafos Pastel</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 2</div>
-                              </div>
-                            </div>
-
-                            <div className="flex items-center">
-                               {/* Añadir relative al padre de la imagen */}
-                              <div className="w-16 h-16 relative flex-shrink-0">
-                                <Image
-                                  src="/product-organizer.png"
-                                  alt="Organizador de Escritorio"
-                                  fill
-                                  className="object-contain"
-                                />
-                              </div>
-                              <div className="ml-3">
-                                <h4 className="text-sm font-medium">Organizador de Escritorio</h4>
-                                <div className="text-xs text-gray-500 mt-1">Qty: 1</div>
-                              </div>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </div>
-            </div>
-          </div>
+                  ))}
+                </div>
+                {/* Optional: Button to view order details page */}
+                 {/* <div className="mt-6 text-right">
+                     <Link href={`/cuenta/pedidos/${order.id}`} passHref>
+                         <Button variant="outline">Ver Detalles</Button>
+                     </Link>
+                 </div> */}
+              </CardContent>
+            </Card>
+          ))}
         </div>
       </div>
     </div>
-  )
+  );
 }
