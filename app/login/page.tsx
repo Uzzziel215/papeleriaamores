@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"; // Import useEffect
 import { useRouter } from "next/navigation"
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
@@ -21,8 +21,18 @@ export default function LoginPage() {
   const [password, setPassword] = useState("")
   const [error, setError] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signIn } = useAuth()
+  const { signIn, user, isLoading: isLoadingAuth } = useAuth() // Get user and isLoadingAuth
   const router = useRouter()
+
+  // Client-side redirect after successful authentication
+  useEffect(() => {
+    console.log("Login Page useEffect: user", user, "isLoadingAuth", isLoadingAuth);
+    if (!isLoadingAuth && user) { // Check if auth state has settled and user is authenticated
+      console.log("Login Page useEffect: User authenticated, redirecting to home.");
+      router.push("/"); // Redirect to home page
+    }
+  }, [user, isLoadingAuth, router]); // Depend on user, isLoadingAuth, and router
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -31,7 +41,8 @@ export default function LoginPage() {
 
     try {
       await signIn(email, password)
-      router.push("/cuenta")
+      // Redirection will now be handled by the useEffect hook
+      // router.push("/cuenta")
     } catch (err: any) {
       setError(err.message || "Error al iniciar sesión")
     } finally {

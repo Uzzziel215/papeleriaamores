@@ -8,7 +8,7 @@ export async function middleware(req: NextRequest) {
   const res = NextResponse.next()
   const supabase = createMiddlewareClient({ req, res })
 
-  // Log incoming cookies to see if session cookie is present
+  // Log incoming cookies in middleware
   console.log("Incoming cookies in middleware:", req.headers.get('cookie'));
 
   // Refresh the session — this will also set the cookie
@@ -42,10 +42,10 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(redirectUrl);
   }
 
-  // If the user is authenticated and tries to access login/register, redirect to account
+  // If the user is authenticated and tries to access login/register, redirect to home
   if (isOnAuthPage && session) {
-     console.log("Middleware: Authenticated user on auth page, redirecting to account."); // Log this redirect
-    return NextResponse.redirect(new URL("/cuenta", req.url));
+     console.log("Middleware: Authenticated user on auth page, redirecting to home."); // Log this redirect
+    return NextResponse.redirect(new URL("/", req.url)); // Redirect to home page instead of account
   }
 
   console.log("Middleware: Allowing request to proceed."); // Log when request proceeds

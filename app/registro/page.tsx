@@ -2,7 +2,8 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"; // Import useEffect
+import { useRouter } from "next/navigation"; // Import useRouter
 import Link from "next/link"
 import { useAuth } from "@/contexts/AuthContext"
 import { Button } from "@/components/ui/button"
@@ -22,7 +23,18 @@ export default function RegisterPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(false)
-  const { signUp } = useAuth()
+  const { signUp, user, isLoading: isLoadingAuth } = useAuth(); // Get user and isLoadingAuth
+  const router = useRouter(); // Get router
+
+   // Client-side redirect after successful authentication
+   useEffect(() => {
+     console.log("Register Page useEffect: user", user, "isLoadingAuth", isLoadingAuth);
+     if (!isLoadingAuth && user) { // Check if auth state has settled and user is authenticated
+       console.log("Register Page useEffect: User authenticated, redirecting to home.");
+       router.push("/"); // Redirect to home page
+     }
+   }, [user, isLoadingAuth, router]); // Depend on user, isLoadingAuth, and router
+
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

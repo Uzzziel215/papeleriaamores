@@ -197,7 +197,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
                    }
 
                   const latestUserItemsMap = new Map(latestUserItems?.map(item =>
-                      `${item.producto_id}-${item.variante_id || 'null'}`
+                      [`${item.producto_id}-${item.variante_id || 'null'}`, item.cantidad] // Corrected: return [key, value]
                     ) || []
                   );
                   console.log("initCart: Latest user items map:", latestUserItemsMap);
