@@ -5,10 +5,76 @@ import { ProductCard } from "@/components/product-card"
 import { CategoryCard } from "@/components/category-card"
 import { Carousel } from "@/components/carousel"
 import { ChevronRight, Star, TrendingUp, Gift, Truck } from "lucide-react"
+import { supabase } from "@/lib/supabase"
 
+async function getCategories() {
+  const { data, error } = await supabase.from("categorias").select("id, nombre, imagen_url, slug").order("orden")
+  if (error) {
+ throw error
+  }
+  return data
+}
 export default function InicioPage() {
   return (
     <div className="min-h-screen">
+      {/* Async functions to fetch data */}
+      {/* This needs to be outside the component to be awaited */}
+      {async function FeaturedProducts() {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("*, imagenes_producto!inner(url, es_principal), valoraciones_producto(valoracion_promedio)")
+          .eq("destacado", true)
+          .eq("imagenes_producto.es_principal", true);
+        if (error) {
+          console.error("Error fetching featured products:", error);
+          return <p>Error loading featured products.</p>;
+        }
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {data.map((product) => (
+              <ProductCard
+                key={product.id}
+                id={product.id}
+                name={product.nombre}
+                price={product.precio}
+                image={product.imagenes_producto[0]?.url || "/placeholder.svg"}
+                rating={product.valoraciones_producto[0]?.valoracion_promedio || 0}
+                discount={product.porcentaje_descuento || undefined}
+              />
+            ))}
+          </div>
+        );
+      }()}
+
+      {async function NewArrivals() {
+        const { data, error } = await supabase
+          .from("productos")
+          .select("*, imagenes_producto!inner(url, es_principal), valoraciones_producto(valoracion_promedio)")
+          .eq("nuevo", true)
+          .eq("imagenes_producto.es_principal", true)
+          .order("created_at", { ascending: false })
+          .limit(4); // Limit to the first 4 new products
+        if (error) {
+          console.error("Error fetching new arrivals:", error);
+          return <p>Error loading new arrivals.</p>;
+        }
+        return (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+            {data.map((product) => (
+              <ProductCard
+                key={product.id}
+                id={product.id}
+                name={product.nombre}
+                price={product.precio}
+                image={product.imagenes_producto[0]?.url || "/placeholder.svg"}
+                rating={product.valoraciones_producto[0]?.valoracion_promedio || 0}
+                discount={product.porcentaje_descuento || undefined}
+              />
+            ))}
+          </div>
+        );
+      }()}
+
       {/* Hero Section */}
       <section className="bg-[#bdd5fc] py-12 md:py-20">
         <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center">
@@ -47,37 +113,20 @@ export default function InicioPage() {
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4 md:gap-6">
-            <CategoryCard
-              name="Cuadernos"
-              image="/category-notebooks.png"
-              count={42}
-              href="/productos?categoria=cuadernos"
-            />
-            <CategoryCard
-              name="Bolígrafos"
-              image="/category-pens.png"
-              count={38}
-              href="/productos?categoria=boligrafos"
-            />
-            <CategoryCard name="Arte" image="/category-art.png" count={56} href="/productos?categoria=arte" />
-            <CategoryCard
-              name="Organización"
-              image="/category-organization.png"
-              count={25}
-              href="/productos?categoria=organizacion"
-            />
-            <CategoryCard
-              name="Material Escolar"
-              image="/category-school.png"
-              count={31}
-              href="/productos?categoria=escolar"
-            />
-            <CategoryCard
-              name="Agendas"
-              image="/category-planners.png"
-              count={18}
-              href="/productos?categoria=agendas"
-            />
+            {/* For now, it remains with static data as the async fetch needs to be handled */}
+ {
+ getCategories().then((categories) => (
+ categories.map((category) => (
+ <CategoryCard
+ key={category.id}
+ name={category.nombre}
+ image={category.imagen_url || ""} // Provide a default empty string if imagen_url can be null
+ // count={0} // We don't have the product count yet from this simple query
+ href={`/productos?categoria=${category.slug}`}
+ />
+ ))
+ ))
+ }
           </div>
         </div>
       </section>
@@ -93,32 +142,7 @@ export default function InicioPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            <ProductCard
-              id="1"
-              name="Cuaderno Espiral Colorido"
-              price={12.99}
-              image="/product-notebook.png"
-              rating={4.5}
-              discount={15}
-            />
-            <ProductCard id="2" name="Set de Bolígrafos Pastel" price={8.5} image="/product-pens.png" rating={4.8} />
-            <ProductCard
-              id="3"
-              name="Organizador de Escritorio"
-              price={24.99}
-              image="/product-organizer.png"
-              rating={4.2}
-              discount={20}
-            />
-            <ProductCard
-              id="4"
-              name="Agenda 2023 Diseño Floral"
-              price={18.75}
-              image="/product-planner.png"
-              rating={4.7}
-            />
-          </div>
+          {/* Featured Products rendered here */}
         </div>
       </section>
 
@@ -155,38 +179,7 @@ export default function InicioPage() {
             </Link>
           </div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
-            <ProductCard
-              id="5"
-              name="Marcadores Acuarelables"
-              price={15.99}
-              image="/product-markers.png"
-              rating={4.6}
-            />
-            <ProductCard
-              id="6"
-              name="Bloc de Notas Adhesivas"
-              price={4.99}
-              image="/product-sticky-notes.png"
-              rating={4.3}
-              discount={10}
-            />
-            <ProductCard
-              id="7"
-              name="Estuche Escolar Multicolor"
-              price={9.99}
-              image="/product-pencil-case.png"
-              rating={4.4}
-            />
-            <ProductCard
-              id="8"
-              name="Set de Lápices de Colores"
-              price={14.5}
-              image="/product-colored-pencils.png"
-              rating={4.9}
-              discount={25}
-            />
-          </div>
+          {/* New Arrivals rendered here */}
         </div>
       </section>
 

@@ -32,7 +32,7 @@ export function ProductCard({ id, name, price, discountPrice, imageUrl }: Produc
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden group">
-      <div className="relative aspect-square">
+      <div className="relative aspect-square" style={{ position: 'relative' }}>
         <Link href={`/productos/${id}`}>
           <Image
             src={imageUrl || "/placeholder.svg"}

@@ -161,9 +161,12 @@ export default function CarritoPage() {
                 {envio === 0 && <div className="text-green-600 text-sm text-right">Envío gratis</div>}
               </div>
 
-              <Button className="bg-[#0084cc] hover:bg-[#006ba7] text-white w-full py-6 rounded-md text-lg mb-4">
-                Proceder al Pago
-              </Button>
+              {/* Wrapped the button with Link */}
+              <Link href="/checkout" passHref>
+                <Button className="bg-[#0084cc] hover:bg-[#006ba7] text-white w-full py-6 rounded-md text-lg mb-4">
+                  Proceder al Pago
+                </Button>
+              </Link>
 
               <div className="text-center text-sm text-gray-500">
                 <p>Envío gratis en pedidos superiores a €30</p>

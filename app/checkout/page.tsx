@@ -8,7 +8,107 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Checkbox } from "@/components/ui/checkbox"
 
+// Import necessary hooks and supabase client
+import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useCart } from '@/contexts/CartContext';
+import { useAuth } from '@/contexts/AuthContext';
+import { useToast } from '@/components/ui/use-toast';
+import { supabase } from '@/lib/supabase';
+
 export default function CheckoutPage() {
+  // Get cart state and actions
+  const { items, carritoId, clearCart } = useCart();
+  // Get auth state, including isLoading
+  const { user, isLoading: isLoadingAuth } = useAuth();
+  // Get toast function
+  const { toast } = useToast();
+  // Get router for navigation
+  const router = useRouter();
+
+  // State for loading and terms acceptance
+  const [isLoading, setIsLoading] = useState(false);
+  const [termsAccepted, setTermsAccepted] = useState(false);
+
+  // Function to handle the simulated order placement
+  const handlePlaceOrder = async () => {
+    // Return early if auth state is still loading or user is not authenticated
+    if (isLoadingAuth || !user) {
+      if (!user && !isLoadingAuth) { // Only show toast if loading is finished and user is null
+         toast({
+           title: "Error de Autenticación",
+           description: "Debes iniciar sesión para completar la compra.",
+           variant: "destructive",
+         });
+      }
+      return;
+    }
+
+    // Check if cart is empty
+    if (items.length === 0) {
+      toast({
+        title: "Carrito Vacío",
+        description: "No puedes realizar un pedido con un carrito vacío.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Check if terms are accepted
+    if (!termsAccepted) {
+      toast({
+        title: "Términos no aceptados",
+        description: "Debes aceptar los términos y condiciones para continuar.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsLoading(true);
+
+    try {
+      // Call the Supabase RPC function
+      // Pass carritoId, and NULL for shipping_address_id_input and order_notes_input for now
+      const { data: newOrderId, error } = await supabase.rpc('place_simulated_order', {
+        cart_id_input: carritoId,
+        shipping_address_id_input: null, // Replace with selected address ID when implemented
+        order_notes_input: null, // Replace with order notes when implemented
+      });
+
+      if (error) {
+        console.error("Error calling place_simulated_order RPC:", error);
+        toast({
+          title: "Error al procesar tu pedido",
+          description: error.message, // Display the error message from the RPC
+          variant: "destructive",
+        });
+      } else {
+        console.log("Order placed successfully with ID:", newOrderId);
+        toast({
+          title: "Pedido Confirmado",
+          description: `Tu pedido ha sido procesado exitosamente. ID: ${newOrderId}`,
+          variant: "success",
+        });
+
+        // Clear the local cart state after successful order
+        clearCart();
+
+        // Redirect to order history or confirmation page
+        router.push('/cuenta/pedidos'); // Adjust the redirection path as needed
+      }
+
+    } catch (error: any) {
+      console.error("Caught exception during order placement:", error);
+       toast({
+          title: "Error Inesperado",
+          description: error.message || "Ocurrió un error al procesar tu pedido.",
+          variant: "destructive",
+        });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-[#f5f8ff]">
       <div className="max-w-6xl mx-auto px-4 py-8">
@@ -30,6 +130,7 @@ export default function CheckoutPage() {
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center justify-between">
                   <h2 className="text-xl font-semibold">Dirección de Envío</h2>
+                  {/* Placeholder 'Editar' button - replace with actual address management link/modal */}
                   <Button variant="link" className="text-[#0084cc] text-sm p-0">
                     Editar
                   </Button>
@@ -37,6 +138,14 @@ export default function CheckoutPage() {
               </div>
 
               <div className="p-6">
+                 {/*
+                   Placeholder for Address form fields.
+                   In a real app, you would fetch/select user's saved addresses here
+                   and potentially allow adding a new one. The selected address ID
+                   would be passed to the place_simulated_order RPC.
+                 */}
+                <p className="text-gray-600">[Contenido del formulario/selección de dirección]</p>
+                 {/* Static Address form fields - remove or replace with controlled components linked to state */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                   <div>
                     <Label htmlFor="firstName">Nombre</Label>
@@ -100,6 +209,8 @@ export default function CheckoutPage() {
               </div>
 
               <div className="p-6">
+                {/* Placeholder for Shipping Method selection */}
+                 <p className="text-gray-600">[Selección del método de envío]</p>
                 <RadioGroup defaultValue="standard">
                   <div className="flex items-center justify-between border border-gray-200 rounded-md p-4 mb-3">
                     <div className="flex items-center">
@@ -150,6 +261,8 @@ export default function CheckoutPage() {
               </div>
 
               <div className="p-6">
+                 {/* Placeholder for Payment Method selection */}
+                <p className="text-gray-600">[Selección del método de pago (simulado)]</p>
                 <RadioGroup defaultValue="card">
                   <div className="flex items-center justify-between border border-gray-200 rounded-md p-4 mb-3">
                     <div className="flex items-center">
@@ -157,10 +270,11 @@ export default function CheckoutPage() {
                       <Label htmlFor="card" className="ml-2">
                         <div className="flex items-center">
                           <CreditCard className="h-5 w-5 mr-2" />
-                          <span className="font-medium">Tarjeta de Crédito/Débito</span>
+                          <span className="font-medium">Tarjeta de Crédito/Débito (Simulado)</span>
                         </div>
                       </Label>
                     </div>
+                    {/* Placeholder card icons */}
                     <div className="flex space-x-2">
                       <div className="w-10 h-6 bg-gray-200 rounded"></div>
                       <div className="w-10 h-6 bg-gray-200 rounded"></div>
@@ -168,6 +282,7 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Placeholder for Card details form - remove or make conditional based on payment method */}
                   <div className="border border-gray-200 rounded-md p-4 mb-3 ml-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
                       <div>
@@ -192,13 +307,14 @@ export default function CheckoutPage() {
                     </div>
                   </div>
 
+                  {/* Other placeholder payment methods */}
                   <div className="flex items-center justify-between border border-gray-200 rounded-md p-4 mb-3">
                     <div className="flex items-center">
                       <RadioGroupItem value="paypal" id="paypal" />
                       <Label htmlFor="paypal" className="ml-2">
                         <div className="flex items-center">
                           <div className="w-6 h-6 bg-gray-200 rounded-full mr-2"></div>
-                          <span className="font-medium">PayPal</span>
+                          <span className="font-medium">PayPal (Simulado)</span>
                         </div>
                       </Label>
                     </div>
@@ -210,7 +326,7 @@ export default function CheckoutPage() {
                       <Label htmlFor="transfer" className="ml-2">
                         <div className="flex items-center">
                           <div className="w-6 h-6 bg-gray-200 rounded-full mr-2"></div>
-                          <span className="font-medium">Transferencia Bancaria</span>
+                          <span className="font-medium">Transferencia Bancaria (Simulado)</span>
                         </div>
                       </Label>
                     </div>
@@ -236,84 +352,82 @@ export default function CheckoutPage() {
               </div>
 
               <div className="p-6">
-                {/* Order Items */}
+                {/* Order Items - Display actual cart items */}
                 <div className="space-y-4 mb-6">
-                  <div className="flex items-start">
-                    <div className="w-16 h-16 relative flex-shrink-0">
-                      <Image
-                        src="/product-notebook.png"
-                        alt="Cuaderno Espiral Colorido"
-                        fill
-                        className="object-contain"
-                      />
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <h4 className="text-sm font-medium">Cuaderno Espiral Colorido</h4>
-                      <div className="text-xs text-gray-500 mt-1">
-                        <span>Azul</span> | <span>A5</span> | <span>Qty: 1</span>
+                  {items.length === 0 ? (
+                    <p className="text-gray-600">El carrito está vacío.</p>
+                  ) : (
+                    items.map((item) => (
+                      <div key={item.id} className="flex items-start">
+                        <div className="w-16 h-16 relative flex-shrink-0">
+                           {/* Display product image if available */}
+                          {item.producto?.imagenes_producto && item.producto.imagenes_producto.length > 0 && (
+                             <Image
+                               src={item.producto.imagenes_producto[0].url}
+                               alt={item.producto.nombre || 'Product Image'}
+                               fill
+                               className="object-contain"
+                             />
+                           )}
+                           {/* Fallback if no image */}
+                           {(!item.producto?.imagenes_producto || item.producto.imagenes_producto.length === 0) && (
+                              <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500 text-xs text-center">No Image</div>
+                           )}
+                        </div>
+                        <div className="ml-3 flex-1">
+                          <h4 className="text-sm font-medium">{item.producto?.nombre || 'Producto Desconocido'}</h4>
+                          <div className="text-xs text-gray-500 mt-1">
+                            {/* Display variant info if available */}
+                            {item.variante ? (
+                              <span>{item.variante.tipo}: {item.variante.valor}</span>
+                            ) : (
+                               <span>Sin Variante</span>
+                            )}{' '}| <span>Qty: {item.cantidad}</span>
+                          </div>
+                          {/* Display item price (product price + variant price if applicable) */}
+                          <div className="text-sm font-medium mt-1">
+                            €{((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad.toFixed(2)}
+                          </div>
+                        </div>
                       </div>
-                      <div className="text-sm font-medium mt-1">€12.99</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <div className="w-16 h-16 relative flex-shrink-0">
-                      <Image src="/product-pens.png" alt="Set de Bolígrafos Pastel" fill className="object-contain" />
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <h4 className="text-sm font-medium">Set de Bolígrafos Pastel</h4>
-                      <div className="text-xs text-gray-500 mt-1">
-                        <span>10 unidades</span> | <span>Qty: 2</span>
-                      </div>
-                      <div className="text-sm font-medium mt-1">€17.00</div>
-                    </div>
-                  </div>
-
-                  <div className="flex items-start">
-                    <div className="w-16 h-16 relative flex-shrink-0">
-                      <Image
-                        src="/product-organizer.png"
-                        alt="Organizador de Escritorio"
-                        fill
-                        className="object-contain"
-                      />
-                    </div>
-                    <div className="ml-3 flex-1">
-                      <h4 className="text-sm font-medium">Organizador de Escritorio</h4>
-                      <div className="text-xs text-gray-500 mt-1">
-                        <span>Madera</span> | <span>Qty: 1</span>
-                      </div>
-                      <div className="text-sm font-medium mt-1">€19.99</div>
-                    </div>
-                  </div>
+                    ))
+                  )}
                 </div>
 
+                {/* Placeholder for pricing summary - replace with actual calculations */}
                 <div className="space-y-3 mb-6">
+                   <p className="text-gray-600">[Resumen de precios dinámico]</p>
                   <div className="flex justify-between">
-                    <span className="text-gray-600">Subtotal (4 items)</span>
-                    <span>€49.98</span>
+                    {/* Update item count dynamically */}
+                    <span className="text-gray-600">Subtotal ({items.reduce((sum, item) => sum + item.cantidad, 0)} items)</span>
+                    {/* Placeholder total - replace with calculated value */}
+                    <span>€{items.reduce((sum, item) => sum + ((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad, 0).toFixed(2)}</span>
                   </div>
+                  {/* Placeholder for Discount and Shipping - replace with actual calculations */}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Descuento</span>
-                    <span className="text-green-600">-€7.30</span>
+                    <span className="text-green-600">-€0.00</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Envío</span>
-                    <span>€4.99</span>
+                    <span>€0.00</span>
                   </div>
                 </div>
 
                 <div className="border-t border-gray-100 pt-4 mb-6">
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
-                    <span>€47.67</span>
+                     {/* Placeholder total - replace with calculated value */} 
+                    <span>€{items.reduce((sum, item) => sum + ((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad, 0).toFixed(2)}</span>
                   </div>
-                  <div className="text-green-600 text-sm text-right">Ahorras €7.30</div>
+                  {/* Placeholder savings */}
+                  {/* <div className="text-green-600 text-sm text-right">Ahorras €0.00</div> */}
                 </div>
 
                 <div className="mb-4">
                   <div className="flex items-center mb-3">
-                    <Checkbox id="terms" />
+                    {/* Connect terms checkbox to state */}
+                    <Checkbox id="terms" checked={termsAccepted} onCheckedChange={setTermsAccepted} />
                     <label htmlFor="terms" className="ml-2 text-sm">
                       He leído y acepto los{" "}
                       <Link href="/terminos" className="text-[#0084cc] hover:underline">
@@ -322,6 +436,7 @@ export default function CheckoutPage() {
                     </label>
                   </div>
 
+                  {/* Placeholder for newsletter checkbox */}
                   <div className="flex items-center">
                     <Checkbox id="newsletter" />
                     <label htmlFor="newsletter" className="ml-2 text-sm">
@@ -330,8 +445,13 @@ export default function CheckoutPage() {
                   </div>
                 </div>
 
-                <Button className="bg-[#0084cc] hover:bg-[#006ba7] text-white w-full py-6 rounded-full text-lg mb-4">
-                  Confirmar Pedido
+                {/* Connect button to handler and disabled state */}
+                <Button
+                  className="bg-[#0084cc] hover:bg-[#006ba7] text-white w-full py-6 rounded-full text-lg mb-4"
+                  onClick={handlePlaceOrder}
+                  disabled={isLoading || items.length === 0 || isLoadingAuth || !user || !termsAccepted} // Disable based on state
+                >
+                  {isLoading ? 'Procesando...' : 'Confirmar Pedido'} 
                 </Button>
 
                 <div className="text-center text-sm text-gray-500">

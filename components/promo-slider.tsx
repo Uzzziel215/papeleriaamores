@@ -9,21 +9,21 @@ export function PromoSlider() {
   const [currentSlide, setCurrentSlide] = useState(0)
   const slides = [
     {
-      image: "/promo-1.png",
+      image: "/promo-slider.png",
       alt: "Promoción 1",
       title: "Descuentos Especiales en Cuadernos",
       description: "Aprovecha nuestras ofertas en cuadernos de todas las marcas.",
       link: "/ofertas",
     },
     {
-      image: "/promo-2.png",
+      image: "/promo-slider.png",
       alt: "Promoción 2",
       title: "Nuevos Bolígrafos Pastel",
       description: "Descubre los nuevos colores pastel para tus bolígrafos favoritos.",
       link: "/nuevos",
     },
     {
-      image: "/promo-3.png",
+      image: "/promo-slider.png",
       alt: "Promoción 3",
       title: "Organiza tu Escritorio",
       description: "Encuentra los mejores organizadores para mantener tu espacio de trabajo ordenado.",

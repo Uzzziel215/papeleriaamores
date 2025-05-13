@@ -25,6 +25,7 @@ export default function PedidosPage() {
             <div className="bg-white rounded-lg shadow-sm overflow-hidden mb-6">
               <div className="p-6 border-b border-gray-100">
                 <div className="flex items-center">
+                  {/* Añadir relative al padre de la imagen */}
                   <div className="relative w-16 h-16">
                     <Image src="/avatar-profile.png" alt="Avatar" fill className="rounded-full object-cover" />
                   </div>
@@ -138,6 +139,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-notebook.png"
@@ -153,6 +155,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-pens.png"
@@ -168,6 +171,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-organizer.png"
@@ -219,6 +223,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-markers.png"
@@ -234,6 +239,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-planner.png"
@@ -289,6 +295,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-colored-pencils.png"
@@ -304,6 +311,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-sticky-notes.png"
@@ -363,6 +371,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-colored-pencils.png"
@@ -378,6 +387,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-sticky-notes.png"
@@ -433,6 +443,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-markers.png"
@@ -448,6 +459,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-planner.png"
@@ -503,6 +515,7 @@ export default function PedidosPage() {
 
                           <div className="flex flex-wrap gap-4">
                             <div className="flex items-center">
+                              {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-notebook.png"
@@ -518,6 +531,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-pens.png"
@@ -533,6 +547,7 @@ export default function PedidosPage() {
                             </div>
 
                             <div className="flex items-center">
+                               {/* Añadir relative al padre de la imagen */}
                               <div className="w-16 h-16 relative flex-shrink-0">
                                 <Image
                                   src="/product-organizer.png"
