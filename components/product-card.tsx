@@ -2,6 +2,7 @@ import Image from "next/image"
 import Link from "next/link"
 import { Heart, ShoppingCart, Star } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { useCart } from "@/contexts/CartContext"
 
 interface ProductCardProps {
   id: string
@@ -14,6 +15,11 @@ interface ProductCardProps {
 
 export function ProductCard({ id, name, price, image, rating, discount }: ProductCardProps) {
   const discountedPrice = discount ? price * (1 - discount / 100) : price
+  const { addItem } = useCart() // Use the useCart hook
+
+  const handleAddToCart = () => {
+    addItem(id, null, 1) // Call addItem with product id, null variant id, and quantity 1
+  }
 
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden group">
@@ -67,6 +73,7 @@ export function ProductCard({ id, name, price, image, rating, discount }: Produc
             variant="outline"
             size="icon"
             className="h-8 w-8 rounded-full border-[#0084cc] text-[#0084cc] hover:bg-[#0084cc] hover:text-white"
+            onClick={handleAddToCart} // Add onClick handler
           >
             <ShoppingCart className="h-4 w-4" />
           </Button>

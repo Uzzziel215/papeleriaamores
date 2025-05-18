@@ -1,178 +1,195 @@
-import Image from "next/image"
-import Link from "next/link"
-import { Search, ShoppingCart, Heart, User, Menu, ChevronDown } from "lucide-react"
-import { Button } from "@/components/ui/button"
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from "@/components/ui/dropdown-menu"
-import { useAuth } from "@/contexts/AuthContext"
+// components/layout/header.tsx
+'use client';
 
-export function Header() {
-  const { user, signOut } = useAuth();
+import React, { useState, useEffect, useRef } from 'react';
+import Link from 'next/link';
+import { useAuth } from '@/contexts/AuthContext';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar'; // Usando Avatar genérico por simplicidad
+// Importa los tipos de tu base de datos si los usas con createClientComponentClient
+// import { Database } from '@/types/database.types';
+
+
+const Header = () => {
+  const { user, isLoading: isLoadingAuth } = useAuth();
+  const router = useRouter();
+  const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const [isAdmin, setIsAdmin] = useState(false); // Estado para el estado de administrador del usuario en el header
+  const [checkingAdmin, setCheckingAdmin] = useState(true); // Estado para la carga de verificación de admin
+
+  // Asegúrate de que el cliente Supabase se inicializa solo una vez, idealmente en tu AuthContext
+  const supabase = createClientComponentClient(); // Puedes pasar los tipos: createClientComponentClient<Database>()
+
+
+  // Cerrar el menú cuando se hace clic fuera de él
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
+        setIsMenuOpen(false);
+      }
+    };
+    if (isMenuOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    }
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isMenuOpen]);
+
+  // Verificar si el usuario autenticado es administrador (lógica similar a la página de admin)
+   useEffect(() => {
+       const checkAdminStatus = async () => {
+           if (user) {
+                console.log('Header useEffect (Admin Check): Checking admin status for user ID:', user.id);
+                setCheckingAdmin(true); // Iniciar verificación
+
+                // Usamos maybeSingle() aquí porque esperamos 0 o 1 resultado.
+                const { data, error } = await supabase
+                    .from('admin_users')
+                    .select('user_id')
+                    .eq('user_id', user.id)
+                    .maybeSingle(); // <-- Usamos maybeSingle
+
+                console.log('Header useEffect (Admin Check): Supabase query returned:');
+                console.log('  Data:', data);
+                console.log('  Error:', error);
+
+
+                if (error) {
+                    console.error('Header useEffect (Admin Check): Supabase query returned an error.', error);
+                     console.error('  Error Code:', error.code);
+                     console.error('  Error Message:', error.message);
+                     console.error('  Error Details:', error.details);
+                     console.error('  Error Hint:', error.hint);
+                    setIsAdmin(false);
+                } else if (data) {
+                     console.log('Header useEffect (Admin Check): User found in admin_users (data received).');
+                    setIsAdmin(true);
+                } else {
+                     // data es null Y error es null - esto es lo que maybeSingle retorna si no encuentra filas
+                     console.log('Header useEffect (Admin Check): User not found in admin_users (data is null, error is null).');
+                    setIsAdmin(false);
+                }
+                setCheckingAdmin(false); // Finalizar verificación
+           } else {
+              // Si no hay usuario, no es admin y terminamos de verificar
+              setIsAdmin(false);
+              setCheckingAdmin(false);
+           }
+       };
+
+       // Ejecutar la verificación de admin solo si la carga de auth terminó y el estado del user cambió.
+       // Solo verificar si no estamos ya verificando (para evitar bucles infinitos si hay problemas)
+       // Añadimos una condición para no re-verificar si ya es admin.
+       if (!isLoadingAuth && user && !checkingAdmin && !isAdmin) { // Añadidos user, !checkingAdmin y !isAdmin
+           checkAdminStatus();
+       } else if (!isLoadingAuth && !user && checkingAdmin) {
+           // Si la auth terminó, no hay usuario, y checkingAdmin sigue true, desactívalo.
+           setCheckingAdmin(false);
+       } else if (isLoadingAuth && checkingAdmin) {
+           // Si auth está cargando y checkingAdmin sigue true, déjalo en true.
+           // No hacer nada, se resolverá cuando isLoadingAuth cambie.
+       } else if (isAdmin && checkingAdmin) {
+            // Si ya detectamos que es admin y checkingAdmin sigue true, desactívalo.
+            setCheckingAdmin(false);
+       }
+
+
+   }, [user, isLoadingAuth, supabase, isAdmin, checkingAdmin]); // Añadido isAdmin y checkingAdmin a dependencias
+
+
+  const handleLogout = async () => {
+    console.log('Logging out user:', user?.id);
+    const { error } = await supabase.auth.signOut();
+    if (error) {
+      console.error('Error logging out:', error);
+      // Mostrar mensaje de error si es necesario
+    } else {
+      console.log('User logged out successfully.');
+      setIsMenuOpen(false);
+      router.push('/login'); // Redirigir al login después de cerrar sesión
+    }
+  };
+
+  // Opciones del menú, condicionales basadas en si el usuario está autenticado Y si es admin
+  const menuOptions = user ? (
+    <>
+      <li>
+        <Link href="/cuenta" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 hover:bg-gray-100">
+          Mi Cuenta
+        </Link>
+      </li>
+      <li>
+        <Link href="/cuenta/pedidos" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 hover:bg-gray-100">
+          Mis Pedidos
+        </Link>
+      </li>
+      {/* Mostrar opción "Añadir Producto" SOLO si es administrador */}
+      { !checkingAdmin && isAdmin && ( // Mostrar si ya terminó la verificación y es admin
+          <li>
+              <Link href="/admin/agregar-producto" onClick={() => setIsMenuOpen(false)} className="block px-4 py-2 hover:bg-gray-100">
+                  Añadir Producto
+              </Link>
+          </li>
+      )}
+      <li>
+        <button onClick={handleLogout} className="block w-full text-left px-4 py-2 hover:bg-red-100 text-red-600">
+          Cerrar Sesión
+        </button>
+      </li>
+    </>
+  ) : (
+    // Opciones si no está autenticado (solo link a login, ya manejado por el Link directo)
+     null // No renderizar opciones si no está autenticado, ya que hay un Link directo al Login
+  );
+
 
   return (
-    <header className="bg-white shadow-sm">
-      {/* Top Bar - Subtle and informative */}
-      {/* Further refined background and text color */}
-      <div className="bg-gray-50 text-gray-600 py-2 text-sm">
-        <div className="max-w-6xl mx-auto px-4 flex justify-between items-center">
-          <div className="hidden md:block">Envío gratis en pedidos superiores a €30</div>
-          <div className="flex items-center space-x-4">
-            {/* Added explicit text color and hover effect */}
-            <Link href="/contacto" className="text-gray-600 hover:text-[#0084cc] hover:underline">
-              Contacto
-            </Link>
-            {/* Added explicit text color and hover effect */}
-            <Link href="/ayuda" className="text-gray-600 hover:text-[#0084cc] hover:underline">
-              Ayuda
-            </Link>
-            {/* Language Selector - Interactive element */}
-            {/* Added explicit text color and hover effect */}
-            <div className="flex items-center cursor-pointer text-gray-600 hover:text-[#0084cc]">
-              <span>ES</span>
-              <ChevronDown className="h-4 w-4 ml-1" />
-            </div>
-          </div>
-        </div>
+    <header className="bg-blue-600 text-white p-4 flex justify-between items-center">
+      <div>
+        <Link href="/" className="text-xl font-bold">
+          Papelería Mores
+        </Link>
       </div>
 
-      {/* Main Header - Recreated with enhanced UI/UX */}
-      {/* Increased vertical padding significantly */}
-      <div className="py-8 lg:py-10 border-b border-gray-200">
-        {/* Increased gap for better separation of main elements */}
-        <div className="max-w-6xl mx-auto px-4 flex flex-col md:flex-row items-center justify-between gap-6 md:gap-12 lg:gap-20"> {/* Increased gaps */}
-          {/* Logo - More prominent and well-aligned */}
-          {/* Further increased logo size */}
-          <Link href="/" className="flex-shrink-0 mb-4 md:mb-0">
-            <Image src="/logo.png" alt="Papelería Amores" width={250} height={90} className="object-contain" />
-          </Link>
-
-          {/* Search Bar - Central, expansive, and refined input style */}
-          {/* Adjusted max-width, horizontal padding, and vertical padding for the input */}
-          <div className="flex-1 w-full max-w-screen-sm md:w-auto md:px-4 lg:px-16"> {/* Increased horizontal padding on lg+ */}
-            <div className="relative">
-              {/* Refined input padding, border color, and focus ring */}
-              <input
-                type="text"
-                placeholder="Buscar productos..."
-                className="w-full border border-gray-300 rounded-full py-4 px-6 pl-14 focus:outline-none focus:ring-2 focus:ring-[#0084cc] focus:border-transparent text-base pr-10 transition-colors placeholder:text-gray-500"
-              />
-              {/* Adjusted icon position and color */}
-              <Search className="absolute left-5 top-1/2 transform -translate-y-1/2 h-5 w-5 text-gray-500" />
-            </div>
-          </div>
-
-          {/* Action Icons - Clean, spaced, and interactive */}
-          {/* Increased space between icons on larger screens */}
-          <div className="flex items-center space-x-8 lg:space-x-10 flex-shrink-0 mt-4 md:mt-0">
-            {/* Favorites - Clear icon and count */}
-            {/* Refined icon size, text color, and hover effects */}
-            <Link href="/cuenta/favoritos" className="flex flex-col items-center text-gray-700 hover:text-[#ff6b6b] transition-colors group">
-              <div className="relative">
-                <Heart className="h-6 w-6 group-hover:fill-[#ff6b6b] transition-colors" />
-                {/* Placeholder count - Refined badge size, position, and ring color */}
-                <span className="absolute -top-1 -right-1 bg-[#ff6b6b] text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center ring-2 ring-white">
-                  3
-                </span>
-              </div>
-              <span className="text-xs mt-1 hidden md:block">Favoritos</span>
-            </Link>
-
-            {/* Account Dropdown Menu - Integrated and accessible */}
-            {/* Ensure trigger area is clearly interactive */}
-            {/* Adjusted text color and hover effects for consistency */}
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                {/* Using a div as the trigger for better control over padding/margins */}
-                <div className="flex flex-col items-center cursor-pointer text-gray-700 hover:text-[#0084cc] transition-colors px-2 py-1 -mx-2 rounded">
-                   <User className="h-6 w-6" />
-                   <span className="text-xs mt-1 hidden md:block">Cuenta</span>
-                </div>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent className="w-48">
-                 {user ? (
-                   <>
-                     <DropdownMenuItem asChild>
-                       <Link href="/cuenta" className="flex items-center text-gray-700 hover:text-[#0084cc]">Perfil</Link>
-                     </DropdownMenuItem>
-                     <DropdownMenuItem asChild>
-                       <Link href="/cuenta/pedidos" className="flex items-center text-gray-700 hover:text-[#0084cc]">Pedidos</Link>
-                     </DropdownMenuItem>
-                     <DropdownMenuSeparator />
-                     <DropdownMenuItem onClick={() => signOut()} className="flex items-center cursor-pointer text-gray-700 hover:text-[#0084cc]">
-                       Cerrar sesión
-                     </DropdownMenuItem>
-                   </>
-                 ) : (
-                   <>
-                     <DropdownMenuItem asChild>
-                       <Link href="/login" className="flex items-center text-gray-700 hover:text-[#0084cc]">Iniciar sesión</Link>
-                     </DropdownMenuItem>
-                     <DropdownMenuItem asChild>
-                       <Link href="/registro" className="flex items-center text-gray-700 hover:text-[#0084cc]">Registrarse</Link>
-                     </DropdownMenuItem>
-                   </>
-                 )}
-              </DropdownMenuContent>
-            </DropdownMenu>
-
-            {/* Cart - Clear icon and count */}
-            {/* Refined icon size, text color, and hover effects */}
-            <Link href="/carrito" className="flex flex-col items-center text-gray-700 hover:text-[#0084cc] transition-colors group">
-              <div className="relative">
-                <ShoppingCart className="h-6 w-6 group-hover:fill-[#0084cc] transition-colors" />
-                <span className="absolute -top-1 -right-1 bg-[#0084cc] text-white text-[10px] rounded-full h-4 w-4 flex items-center justify-center ring-2 ring-white">
-                  2
-                </span>
-              </div>
-              <span className="text-xs mt-1 hidden md:block">Carrito</span>
-            </Link>
-          </div>
-        </div>
-      </div>
-
-      {/* Navigation - Hidden on mobile, centered and well-spaced on desktop */}
-      {/* Adjusted top border color for consistency */}
-      <nav className="border-t border-gray-200 hidden md:block">
-        <div className="max-w-6xl mx-auto px-4">
-          {/* Increased space-x for navigation links */}
-          {/* Adjusted text color and hover effects for consistency */}
-          <div className="flex items-center justify-center space-x-10 lg:space-x-12 py-3 text-sm">
-            <Link href="/productos" className="font-medium text-gray-700 hover:text-[#0084cc] transition-colors">
-              Todos los Productos
-            </Link>
-            <Link href="/productos?categoria=cuadernos" className="font-medium text-gray-700 hover:text-[#0084cc] transition-colors">
-              Cuadernos
-            </Link>
-            <Link href="/productos?categoria=boligrafos" className="font-medium text-gray-700 hover:text-[#0084cc] transition-colors">
-              Bolígrafos
-            </Link>
-            <Link href="/productos?categoria=arte" className="font-medium text-gray-700 hover:text-[#0084cc] transition-colors">
-              Arte
-            </Link>
-            <Link href="/productos?categoria=organizacion" className="font-medium text-gray-700 hover:text-[#0084cc] transition-colors">
-              Organización
-            </Link>
-            {/* Adjusted text color and hover for Offers link */}
-            <Link href="/ofertas" className="font-medium text-[#ff6b6b] hover:text-[#ff5252] transition-colors">
-              Ofertas
-            </Link>
-          </div>
-        </div>
+      <nav>
+        <ul className="flex space-x-4">
+          <li><Link href="/productos">Productos</Link></li>
+          <li><Link href="/categorias">Categorías</Link></li>
+          <li><Link href="/ofertas">Ofertas</Link></li>
+        </ul>
       </nav>
 
-       {/* Mobile Menu Button */}
-       {/* Adjusted top border color for consistency */}
-       <div className="md:hidden border-t border-gray-200 flex justify-center py-3">
-         <Button variant="ghost">
-           <Menu className="h-6 w-6" />
-         </Button>
-       </div>
+      <div className="relative" ref={menuRef}>
+        {isLoadingAuth || checkingAdmin ? (
+             <div>...</div> // Indicador de carga mínimo en el header mientras carga auth o verifica admin
+        ) : (
+             user ? (
+                 <div className="flex items-center cursor-pointer" onClick={toggleMenu}>
+                    <Avatar>
+                         {/* Puedes usar user.email.charAt(0) o user.user_metadata?.name?.charAt(0) */}
+                        <AvatarFallback>{user.email?.charAt(0)?.toUpperCase() || \'?\'}</AvatarFallback>
+                    </Avatar>
+                    {/* Mostrar email o nombre si hay espacio */}
+                 </div>
+             ) : (
+                // No autenticado: Botón directo a Login
+                 <Link href="/login" className="bg-white text-blue-600 px-4 py-2 rounded hover:bg-gray-100">
+                    Iniciar Sesión
+                 </Link>
+             )
+        )}
 
+        {isMenuOpen && user && ( // Mostrar menú solo si está abierto Y hay un usuario autenticado
+           <ul className="absolute right-0 mt-2 w-48 bg-white text-gray-800 rounded-md shadow-lg py-1 z-50">
+             {menuOptions}
+           </ul>
+         )}
+      </div>
     </header>
-  )
-}
+  );
+};
+
+export default Header;

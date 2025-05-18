@@ -11,6 +11,7 @@ import { supabase } from "@/lib/supabase";
 
 import { useState, useEffect, useCallback } from "react";
 import Image from 'next/image';
+import { useSearchParams } from 'next/navigation'; // Import useSearchParams
 
 // Definir interfaces para los datos devueltos por la RPC
 // Ahora las columnas no tienen el prefijo 'r_'. Coinciden con la tabla productos + valoracion_promedio.
@@ -49,18 +50,45 @@ interface ProductForFrontend {
 }
 
 export default function ProductosPage() {
+  const searchParams = useSearchParams(); // Get search params
+  const categorySlugFromUrl = searchParams.get('categoria'); // Read 'categoria' parameter
+  const availabilityFromUrl = searchParams.get('availability'); // Read 'availability' parameter
+  const filterFromUrl = searchParams.get('filter'); // Read 'filter' parameter
+
+  // Initialize selectedCategories state with the category slug from URL if it exists
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(
+    categorySlugFromUrl ? [categorySlugFromUrl] : []
+  );
+
   const [products, setProducts] = useState<ProductForFrontend[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Estados para filtros y ordenamiento
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([]);
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]); // Rango de precio inicial (ajustar max si es necesario)
+  // Estados para otros filtros y ordenamiento
+  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
   const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [minRating, setMinRating] = useState<number>(0); // Estado para valoración mínima seleccionada
-  const [availabilityFilters, setAvailabilityFilters] = useState<string[]>([]); // 'in-stock', 'on-offer'
+  const [minRating, setMinRating] = useState<number>(0);
+  
+  // Initialize availabilityFilters state with 'on-offer' if the URL param is present
+  const [availabilityFilters, setAvailabilityFilters] = useState<string[]>(
+    availabilityFromUrl === 'on-offer' ? ['on-offer'] : []
+  );
+
+  // Initialize featuredFilter state based on URL parameter
+  const [featuredFilter, setFeaturedFilter] = useState<boolean>(
+    filterFromUrl === 'featured'
+  );
+
   const [sortOrder, setSortOrder] = useState<string>('relevance');
+
+  // <<--- Add useEffect for logging URL param and initial state (for debugging)
+  useEffect(() => {
+    console.log('ProductosPage mounted');
+    console.log('URL filter param:', filterFromUrl);
+    console.log('Initial featuredFilter state:', featuredFilter);
+  }, [filterFromUrl, featuredFilter]); // Add dependencies to see updates
+
 
   // Función para cargar categorías
   const fetchCategories = useCallback(async () => {
@@ -82,7 +110,6 @@ export default function ProductosPage() {
   const fetchProducts = useCallback(async () => {
     setLoading(true);
 
-    // Preparar parámetros para la RPC. Pasar null para arrays vacíos según la definición de la RPC.
     const rpcParams = {
       category_slugs: selectedCategories.length > 0 ? selectedCategories : null,
       price_min: priceRange[0],
@@ -91,39 +118,37 @@ export default function ProductosPage() {
       min_rating: minRating,
       is_in_stock: availabilityFilters.includes('in-stock'),
       is_on_offer: availabilityFilters.includes('on-offer'),
-      sort_by: sortOrder, // Pasar el criterio de ordenamiento a la RPC
-      // Añadir parámetros de paginación si los implementas (page_limit, page_offset)
+      sort_by: sortOrder,
+      // Removed is_featured filter as it's not supported by the RPC
+      page_limit: 24,
+      page_offset: 0,
     };
 
-    // Llamar a la RPC
     const { data, error } = await supabase.rpc('get_filtered_products_with_rating', rpcParams);
 
     if (error) {
       console.error("Error loading products from RPC:", error);
       setProducts([]);
     } else {
-       // Los datos vienen de la RPC. Necesitamos obtener las imágenes por separado para cada producto.
-       const productIds = data?.map(item => item.id) || []; // Usar item.id ya sin prefijo
+       const productIds = data?.map(item => item.id) || [];
        let productsWithImages: ProductForFrontend[] = [];
 
        if (productIds.length > 0) {
           const { data: imagesData, error: imagesError } = await supabase
             .from('imagenes_producto')
-            .select('id, producto_id, url, es_principal') // Seleccionar también id de imagen
+            .select('id, producto_id, url, es_principal')
             .in('producto_id', productIds);
 
           if (imagesError) {
              console.error("Error fetching product images:", imagesError);
-             // Continuar sin imágenes o manejar el error
           } else {
-             // Mapear los productos devueltos por la RPC y adjuntar sus imágenes
              productsWithImages = data.map((productRpc: ProductRpc) => {
-                const productImages = imagesData?.filter(img => img.producto_id === productRpc.id) || []; // Usar productRpc.id
+                const productImages = imagesData?.filter(img => img.producto_id === productRpc.id) || [];
                  const mainImage = productImages.find(img => img.es_principal) || productImages[0];
                  const imageUrl = mainImage?.url || '/placeholder.jpg';
 
                 return {
-                   id: productRpc.id, // Usar productRpc.id sin prefijo
+                   id: productRpc.id,
                    nombre: productRpc.nombre,
                    precio: productRpc.precio,
                    precio_descuento: productRpc.precio_descuento,
@@ -131,8 +156,8 @@ export default function ProductosPage() {
                    stock: productRpc.stock,
                    destacado: productRpc.destacado,
                    nuevo: productRpc.nuevo,
-                   rating: productRpc.valoracion_promedio, // Usar valoracion_promedio directamente
-                   imagenes_producto: productImages, // Adjuntar las imágenes obtenidas
+                   rating: productRpc.valoracion_promedio,
+                   imagenes_producto: productImages,
                 };
              });
           }
@@ -140,12 +165,12 @@ export default function ProductosPage() {
         setProducts(productsWithImages);
     }
     setLoading(false);
-  }, [selectedCategories, priceRange, selectedBrands, minRating, availabilityFilters, sortOrder]); // Dependencias del efecto
+  }, [selectedCategories, priceRange, selectedBrands, minRating, availabilityFilters, sortOrder, featuredFilter]); // Add featuredFilter to dependencies
 
   // Efectos para cargar datos iniciales y refetching al cambiar filtros/orden
   useEffect(() => {
     fetchCategories();
-    fetchBrands(); // Cargar marcas disponibles
+    fetchBrands();
   }, [fetchCategories, fetchBrands]);
 
    useEffect(() => {
@@ -197,13 +222,13 @@ export default function ProductosPage() {
   // Manejar limpiar todos los filtros
   const handleClearFilters = () => {
     setSelectedCategories([]);
-    setPriceRange([0, 1000]); // Ajustar si el rango máximo real es diferente.
+    setPriceRange([0, 1000]);
     setSelectedBrands([]);
     setMinRating(0);
     setAvailabilityFilters([]);
+    setFeaturedFilter(false); // Clear featured filter
     setSortOrder('relevance');
   };
-
 
   return (
     <div className="min-h-screen bg-[#f5f8ff]">
@@ -329,7 +354,7 @@ export default function ProductosPage() {
                        />
                        <label htmlFor={`rating-${ratingValue}`} className="ml-2 text-sm flex items-center">
                          <div className="flex">
-                           {[...Array(ratingValue)].map((_, i) => (
+                           {[...Array(5)].map((_, i) => (
                              <Star key={i} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
                            ))}
                            {[...Array(5 - ratingValue)].map((_, i) => (
@@ -367,6 +392,17 @@ export default function ProductosPage() {
                       Oferta
                     </label>
                   </div>
+                   {/* <<< ADDED: Checkbox for Featured Products >>> */}
+                  <div className="flex items-center">
+                    <Checkbox
+                      id="filter-featured"
+                      checked={featuredFilter}
+                      onCheckedChange={(isChecked: boolean) => setFeaturedFilter(isChecked)}
+                    />
+                    <label htmlFor="filter-featured" className="ml-2 text-sm">
+                      Destacados
+                    </label>
+                  </div>
                 </div>
               </div>
             </div>
@@ -383,7 +419,7 @@ export default function ProductosPage() {
                 ) : (
                   products.map((product) => {
                     // Encontrar la imagen principal o usar la primera si no hay principal
-                    const mainImage = product.imagenes_producto.find(img => img.es_principal) || product.imagenes_producto[0];
+                    const mainImage = product.imagenes_producto.find(img => img.es_principal) || product.imagenes_producto?.[0];
                     const imageUrl = mainImage?.url || '/placeholder.jpg';
 
                     return (
@@ -394,7 +430,7 @@ export default function ProductosPage() {
                         price={product.precio}
                         image={imageUrl}
                         rating={product.rating} // Usar la valoración promedio real obtenida de la RPC
-                        discount={product.precio_descuento ? Math.round(((product.precio - product.precio_descuento) / product.precio) * 100) : undefined}
+                        discount={product.porcentaje_descuento ? Math.round(((product.precio - product.precio_descuento) / product.precio) * 100) : undefined}
                       />
                     );
                   })

@@ -4,7 +4,7 @@ import Link from "next/link"
 interface CategoryCardProps {
   name: string
   image: string
-  count: number
+  count?: number // Made count optional
   href: string
 }
 
@@ -23,7 +23,8 @@ export function CategoryCard({ name, image, count, href }: CategoryCardProps) {
 
         <div className="p-3 text-center">
           <h3 className="font-medium group-hover:text-[#0084cc] transition-colors">{name}</h3>
-          <p className="text-sm text-gray-500">{count} productos</p>
+          {/* Conditionally display count only if it exists */}
+          {count !== undefined && <p className="text-sm text-gray-500">{count} productos</p>}
         </div>
       </div>
     </Link>

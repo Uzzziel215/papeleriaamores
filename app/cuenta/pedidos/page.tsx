@@ -1,189 +1,180 @@
+// app/cuenta/pedidos/page.tsx
 'use client';
 
-import { useState, useEffect } from 'react';
-import Link from 'next/link';
-import { supabase } from '@/lib/supabase';
+import { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
-import { Breadcrumb } from '@/components/breadcrumb';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
-import { format } from 'date-fns';
-import { es } from 'date-fns/locale'; // Assuming you need Spanish locale for dates
-import { Separator } from '@/components/ui/separator';
-import { Button } from '@/components/ui/button';
+import { createClientComponentClient } from '@supabase/auth-helpers-nextjs';
+import { useRouter } from 'next/navigation';
+// import { Database } from '@/types/database.types'; // Importa tus tipos si los usas
 
-// Define types for Order and OrderItem based on your database schema
-// Assuming 'pedidos' table with id, created_at, estado, total
-// Assuming 'detalles_pedido' table with pedido_id, cantidad, precio_unitario, subtotal, producto_id, variante_id
-// Assuming 'productos' table with id, nombre
-// Assuming 'variantes_producto' table with id, valor (e.g., color, size)
-
-interface OrderItem {
-  cantidad: number;
-  precio_unitario: number;
-  subtotal: number;
-  productos: { // Assuming products relationship is named 'productos'
-    nombre: string;
-  } | null; // Product details might be null if product was deleted
-  variantes: { // Assuming variants relationship is named 'variantes'
-    valor: string | null;
-  } | null; // Variant details might be null
+// Define un tipo básico para los pedidos, ajústalo según la estructura exacta de tus datos
+// Asegúrate de que estos tipos coinciden con el SELECT que haces
+interface OrderDetail {
+    cantidad: number;
+    precio_unitario: number;
+    subtotal: number;
+    productos: { nombre: string } | null; // Asumiendo que productos es un objeto con nombre
+    variantes: { valor: string } | null; // Asumiendo que variantes es un objeto con valor
 }
 
 interface Order {
-  id: string;
-  created_at: string; // Supabase returns timestamp strings
-  estado: string; // Should match your estado_pedido ENUM values
-  total: number;
-  detalles_pedido: OrderItem[]; // Assuming the relationship is named 'detalles_pedido'
+    id: string;
+    created_at: string; // O Date si prefieres parsearla
+    estado: string; // O el tipo exacto de tu ENUM estado_pedido
+    total: number;
+    detalles_pedido: OrderDetail[];
+    // Añade otras columnas de la tabla 'pedidos' que selecciones
+    numero_pedido?: string; // Si seleccionas el numero_pedido
+    direccion_envio_id?: string | null; // Si seleccionas la dirección
 }
 
-export default function OrdersPage() {
-  const { user, isLoading: isLoadingUser } = useAuth();
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    async function fetchOrders() {
-      setIsLoading(true);
-      setError(null);
+const PedidosPage = () => {
+    const { user, isLoading: isLoadingUser } = useAuth();
+    const router = useRouter();
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [isLoading, setIsLoading] = useState(true); // Estado de carga para los pedidos
+    const [error, setError] = useState<string | null>(null);
 
-      if (!user) {
-         // If user is not loaded and not loading, it means they are not logged in
-         if (!isLoadingUser) {
-           setError('Debes iniciar sesión para ver tus pedidos.');
-         }
-         setIsLoading(false);
-         setOrders([]); // Ensure orders are empty if no user
-         return;
-      }
+    // Asegúrate de que el cliente Supabase se inicializa solo una vez, idealmente en tu AuthContext
+    const supabase = createClientComponentClient(); // Puedes pasar los tipos: createClientComponentClient<Database>()
 
-      try {
-        // Fetch orders for the logged-in user
-        const { data: ordersData, error: ordersError } = await supabase
-          .from('pedidos') // Your orders table name
-          .select(\`
-            id,
-            created_at,
-            estado,
-            total,
-            detalles_pedido (
-              cantidad,
-              precio_unitario,
-              subtotal,
-              productos ( nombre ),
-              variantes ( valor )
-            )
-          \`) // Select order details and nested order items with product/variant names
-          .eq('usuario_id', user.id) // Filter by the logged-in user's ID
-          .order('created_at', { ascending: false }); // Order by most recent first
 
-        if (ordersError) {
-          console.error('Error fetching orders:', ordersError);
-          setError(ordersError.message);
-          setOrders([]);
-        } else {
-          setOrders(ordersData as Order[]);
+    useEffect(() => {
+        // Redirigir si el usuario no está autenticado después de que la carga de auth termine
+        console.log('PedidosPage useEffect (Auth Check): isLoadingUser', isLoadingUser, 'user', user ? user.id : null);
+        if (!isLoadingUser && !user) {
+             console.log('PedidosPage useEffect (Auth Check): User not authenticated, redirecting to login.');
+            router.push('/login');
         }
-      } catch (err: any) {
-        console.error('Caught exception fetching orders:', err);
-        setError('Ocurrió un error inesperado al cargar los pedidos.');
-        setOrders([]);
-      } finally {
-        setIsLoading(false);
-      }
+    }, [user, isLoadingUser, router]); // Depende del estado del usuario y la carga de auth
+
+
+    useEffect(() => {
+        // Función asíncrona para cargar los pedidos
+        const fetchOrders = async () => {
+            console.log('PedidosPage useEffect (Fetch Orders): Fetching orders for user ID:', user?.id);
+            setIsLoading(true); // Iniciar carga antes de la consulta
+            setError(null); // Limpiar errores anteriores
+
+            if (!user) {
+                 console.log('PedidosPage useEffect (Fetch Orders): No user available to fetch orders.');
+                 setIsLoading(false);
+                 setError('Debes iniciar sesión para ver tus pedidos.');
+                 return; // No intentar buscar si no hay usuario
+            }
+
+            try {
+                // Fetch orders for the logged-in user
+                const { data: ordersData, error: ordersError } = await supabase
+                  .from('pedidos') // Your orders table name
+                  // CADENA SELECT CORREGIDA:
+                  .select(`
+                    id,
+                    numero_pedido, -- Incluir numero_pedido si lo tienes y seleccionas
+                    created_at,
+                    estado,
+                    total,
+                    detalles_pedido (
+                      cantidad,
+                      precio_unitario,
+                      subtotal,
+                      productos ( nombre ),
+                      variantes ( valor )
+                    )
+                  `) // Select order details and nested order items with product/variant names
+                  .eq('usuario_id', user.id) // Filter by the logged-in user's ID
+                  .order('created_at', { ascending: false }); // Order by most recent first
+
+
+                console.log('PedidosPage useEffect (Fetch Orders): Supabase query returned:');
+                console.log('  Data:', ordersData);
+                console.log('  Error:', ordersError); // Logear el objeto error completo
+
+                if (ordersError) {
+                    console.error('PedidosPage useEffect (Fetch Orders): Error fetching orders:', ordersError);
+                    // Loguear detalles específicos del error si están disponibles
+                    console.error('  Error Code:', ordersError.code);
+                    console.error('  Error Message:', ordersError.message);
+                    console.error('  Error Details:', ordersError.details);
+                    console.error('  Error Hint:', ordersError.hint);
+
+                    setError(ordersError.message || 'Error desconocido al cargar pedidos.');
+                    setOrders([]);
+                } else {
+                    console.log('PedidosPage useEffect (Fetch Orders): Orders data received.');
+                    setOrders(ordersData as Order[]);
+                }
+            } catch (err: any) {
+                 console.error('PedidosPage useEffect (Fetch Orders): Caught exception:', err);
+                setError('Ocurrió un error inesperado al cargar los pedidos: ' + (err.message || err));
+                setOrders([]);
+            } finally {
+                setIsLoading(false); // Finalizar carga
+            }
+        }
+
+        // Solo buscar pedidos si la carga de autenticación ha terminado y hay un usuario
+        // y la página no está actualmente cargando pedidos.
+        // Usamos isLoading como dependencia para permitir reintentos si estaba true y no se completó.
+        if (!isLoadingUser && user && isLoading) { // Mantenemos isLoading como dependencia para posibles reintentos
+             fetchOrders();
+        } else if (!isLoadingUser && !user && isLoading) {
+             // Si auth terminó, no hay usuario, y isLoading sigue true, significa que no se pudo buscar.
+             setIsLoading(false); // Asegurar que el estado de carga se desactive.
+        }
+
+
+    }, [user, isLoadingUser, supabase, isLoading]); // Depende de user, isLoadingUser, supabase y isLoading (para reintentar si isLoading sigue true)
+
+
+    // Lógica de Renderizado
+    if (isLoadingUser || isLoading) {
+        console.log('PedidosPage Render: Showing Loading...');
+        return <div>Cargando pedidos...</div>;
     }
 
-    // Only fetch if user data is available (not loading and not null)
-    if (!isLoadingUser && user) {
-      fetchOrders();
-    } else if (!isLoadingUser && !user) {
-       // Handle case where user is not logged in after auth loading is complete
-       setIsLoading(false);
-       setError('Debes iniciar sesión para ver tus pedidos.');
+    if (error) {
+         console.log('PedidosPage Render: Showing Error:', error);
+        return <div>Error al cargar pedidos: {error}</div>;
     }
 
-  }, [user, isLoadingUser]); // Depend on user and isLoadingUser to refetch when auth state changes
+     if (!user) {
+        // Este caso debería ser manejado por el primer useEffect para redirigir.
+        // Como fallback de render si por alguna razón no redirigió.
+        console.log('PedidosPage Render: User not present after loading. Should have redirected.');
+         return null; // O un mensaje indicando que inicie sesión
+     }
 
-  // Format date for display
-  const formatOrderDate = (dateString: string) => {
-    try {
-       // Parse date string and format it in Spanish
-       return format(new Date(dateString), 'dd MMMM yyyy, HH:mm', { locale: es });
-    } catch (e) {
-       console.error('Error formatting date:', e);
-       return dateString; // Return original string if formatting fails
-    }
-  };
 
-  return (
-    <div className="min-h-screen bg-[#f5f8ff]">
-      <div className="max-w-6xl mx-auto px-4 py-8">
-        <Breadcrumb
-          items={[
-            { label: 'Inicio', href: '/' },
-            { label: 'Cuenta', href: '/cuenta' },
-            { label: 'Pedidos', href: '/cuenta/pedidos', active: true },
-          ]}
-        />
-
-        <h1 className="text-3xl font-bold mb-8">Mis Pedidos</h1>
-
-        {isLoading || isLoadingUser && <p className="text-center">Cargando pedidos...</p>}
-        {error && <p className="text-center text-red-500">{error}</p>}
-
-        {!isLoading && !error && orders.length === 0 && (
-          <div className="text-center">
-             <p className="text-gray-600 mb-4">No has realizado ningún pedido todavía.</p>
-             <Link href="/productos" passHref>
-                <Button className="bg-[#0084cc] hover:bg-[#006ba7]">Explorar Productos</Button>
-             </Link>
-          </div>
-        )}
-
-        <div className="space-y-6">
-          {!isLoading && !error && orders.map((order) => (
-            <Card key={order.id} className="overflow-hidden">
-              <CardHeader className="bg-gray-100/50 flex-row items-center justify-between space-y-0 py-4 px-6">
-                <div>
-                  <CardTitle className="text-lg font-semibold">Pedido #{order.id.substring(0, 8)}</CardTitle> {/* Display truncated ID */}
-                  <CardDescription className="text-sm text-gray-600">{formatOrderDate(order.created_at)}</CardDescription>
-                </div>
-                <div className="text-lg font-bold text-[#0084cc]">€{order.total.toFixed(2)}</div>
-              </CardHeader>
-              <CardContent className="p-6">
-                <div className="mb-4">
-                   <h3 className="text-md font-semibold mb-2">Estado: <span className="font-normal text-gray-700">{order.estado}</span></h3>
-                </div>
-                <Separator className="mb-4" />
-                <div className="space-y-4">
-                  {order.detalles_pedido.map((item, itemIndex) => (
-                    <div key={itemIndex} className="flex items-start">
-                       {/* You would typically join with product/variant to show image here */}
-                       {/* Placeholder for item image */}
-                        <div className="w-12 h-12 bg-gray-200 rounded mr-4 flex-shrink-0"></div>
-                       <div className="flex-1">
-                         <p className="text-sm font-medium">{item.productos?.nombre || 'Producto Desconocido'}</p>
-                          {item.variantes?.valor && (
-                              <p className="text-xs text-gray-600">Variante: {item.variantes.valor}</p>
-                          )}
-                         <p className="text-sm text-gray-600">Cantidad: {item.cantidad}</p>
-                          <p className="text-sm font-semibold">€{(item.precio_unitario * item.cantidad).toFixed(2)}</p>
-                       </div>
-                    </div>
-                  ))}
-                </div>
-                {/* Optional: Button to view order details page */}
-                 {/* <div className="mt-6 text-right">
-                     <Link href={`/cuenta/pedidos/${order.id}`} passHref>
-                         <Button variant="outline">Ver Detalles</Button>
-                     </Link>
-                 </div> */}
-              </CardContent>
-            </Card>
-          ))}
+    console.log('PedidosPage Render: Showing Orders.');
+    return (
+        <div className="container mx-auto py-8">
+            <h1 className="text-2xl font-bold mb-6">Mis Pedidos</h1>
+            {orders.length === 0 ? (
+                <p>No tienes pedidos aún.</p>
+            ) : (
+                <ul>
+                    {orders.map(order => (
+                        <li key={order.id} className="mb-4 p-4 border rounded-md">
+                            <h2 className="text-lg font-semibold">Pedido #{order.numero_pedido || order.id}</h2> {/* Usando numero_pedido si existe */}
+                            <p>Estado: {order.estado}</p>
+                            <p>Fecha: {new Date(order.created_at).toLocaleDateString()}</p>
+                            <p>Total: ${order.total.toFixed(2)}</p>
+                            <h3 className="font-medium mt-2">Productos:</h3>
+                            <ul>
+                                {order.detalles_pedido.map((detail, index) => (
+                                    <li key={index} className="ml-4 text-sm">
+                                        {detail.cantidad} x {detail.productos?.nombre} ({detail.variantes?.valor || 'N/A'}) - ${(detail.cantidad * detail.precio_unitario).toFixed(2)}
+                                    </li>
+                                ))}
+                            </ul>
+                        </li>
+                    ))}
+                </ul>
+            )}
         </div>
-      </div>
-    </div>
-  );
-}
+    );
+};
+
+export default PedidosPage;

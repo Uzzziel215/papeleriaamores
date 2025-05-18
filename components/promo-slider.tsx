@@ -5,31 +5,19 @@ import Image from "next/image"
 import { ChevronLeft, ChevronRight } from "lucide-react"
 import { Button } from "@/components/ui/button"
 
-export function PromoSlider() {
-  const [currentSlide, setCurrentSlide] = useState(0)
-  const slides = [
-    {
-      image: "/promo-slider.png",
-      alt: "Promoción 1",
-      title: "Descuentos Especiales en Cuadernos",
-      description: "Aprovecha nuestras ofertas en cuadernos de todas las marcas.",
-      link: "/ofertas",
-    },
-    {
-      image: "/promo-slider.png",
-      alt: "Promoción 2",
-      title: "Nuevos Bolígrafos Pastel",
-      description: "Descubre los nuevos colores pastel para tus bolígrafos favoritos.",
-      link: "/nuevos",
-    },
-    {
-      image: "/promo-slider.png",
-      alt: "Promoción 3",
-      title: "Organiza tu Escritorio",
-      description: "Encuentra los mejores organizadores para mantener tu espacio de trabajo ordenado.",
-      link: "/productos?categoria=organizacion",
-    },
-  ]
+interface PromoSliderProps {
+  bannerImages?: string[]; // Hacemos la prop opcional con '?'
+}
+
+export function PromoSlider({ bannerImages }: PromoSliderProps) { // Aceptamos la prop
+  const [currentSlide, setCurrentSlide] = useState(0);
+
+  // Usamos las URLs de las imágenes pasadas como prop, o un array vacío si bannerImages es undefined o null
+  const slides = (bannerImages || []).map(url => ({
+    image: url,
+    alt: "Banner Promocional",
+  }));
+
 
   const nextSlide = () => {
     setCurrentSlide((prevSlide) => (prevSlide === slides.length - 1 ? 0 : prevSlide + 1))
@@ -40,9 +28,11 @@ export function PromoSlider() {
   }
 
   useEffect(() => {
-    const timer = setTimeout(nextSlide, 5000)
-    return () => clearTimeout(timer)
-  }, [currentSlide])
+    if (slides.length > 1) { // Solo iniciar el carrusel automático si hay más de una imagen
+      const timer = setTimeout(nextSlide, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [currentSlide, slides.length]); // Añadir slides.length como dependencia
 
   return (
     <div className="relative w-full">
@@ -51,37 +41,37 @@ export function PromoSlider() {
           className="flex transition-transform duration-500 ease-in-out"
           style={{ transform: `translateX(-${currentSlide * 100}%)` }}
         >
+          {/* Renderizamos las imágenes de los banners */}
           {slides.map((slide, index) => (
-            <div key={index} className="w-full flex-shrink-0 relative">
+            <div key={index} className="w-full flex-shrink-0 relative h-64 md:h-80"> {/* Ajusta la altura según necesites */}
               <Image
-                src={slide.image || "/placeholder.svg"}
+                src={slide.image}
                 alt={slide.alt}
-                width={1200}
-                height={400}
-                className="object-cover w-full h-64 md:h-80"
+                fill // Usamos fill para que la imagen cubra el contenedor
+                style={{ objectFit: 'cover' }} // Asegura que la imagen cubra el área sin distorsionarse
               />
-              <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-center">
-                <h3 className="text-2xl font-bold text-white mb-2">{slide.title}</h3>
-                <p className="text-white text-lg mb-4">{slide.description}</p>
-                <Button className="bg-[#ffaa00] hover:bg-[#e69900] text-white rounded-full px-6 py-3">
-                  <a href={slide.link}>Ver Más</a>
-                </Button>
-              </div>
+               <div className="absolute inset-0 flex items-center justify-center">
+               </div>
             </div>
           ))}
         </div>
       </div>
 
-      <div className="absolute top-1/2 left-2 transform -translate-y-1/2">
-        <Button variant="outline" size="icon" className="rounded-full" onClick={prevSlide}>
-          <ChevronLeft className="h-6 w-6" />
-        </Button>
-      </div>
-      <div className="absolute top-1/2 right-2 transform -translate-y-1/2">
-        <Button variant="outline" size="icon" className="rounded-full" onClick={nextSlide}>
-          <ChevronRight className="h-6 w-6" />
-        </Button>
-      </div>
+      {/* Mostramos botones de navegación solo si hay más de una imagen */}
+      {slides.length > 1 && (
+        <>
+          <div className="absolute top-1/2 left-2 transform -translate-y-1/2 z-10">
+            <Button variant="outline" size="icon" className="rounded-full" onClick={prevSlide}>
+              <ChevronLeft className="h-6 w-6" />
+            </Button>
+          </div>
+          <div className="absolute top-1/2 right-2 transform -translate-y-1/2 z-10">
+            <Button variant="outline" size="icon" className="rounded-full" onClick={nextSlide}>
+              <ChevronRight className="h-6 w-6" />
+            </Button>
+          </div>
+        </>
+      )}
     </div>
   )
 }

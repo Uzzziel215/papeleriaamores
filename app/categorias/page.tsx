@@ -4,13 +4,13 @@ import { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { Breadcrumb } from '@/components/breadcrumb';
 import Link from 'next/link';
+import Image from 'next/image';
 
-// Assuming you have a type for Category
 interface Category {
     id: string;
-    nombre: string; // Assuming categories have a name
-    slug: string; // Assuming categories have a slug for URL filtering
-    // Add other category fields if necessary
+    nombre: string;
+    slug: string;
+    imagen_url: string | null;
 }
 
 export default function CategoriesPage() {
@@ -23,11 +23,9 @@ export default function CategoriesPage() {
       setIsLoading(true);
       setError(null);
       try {
-        // Fetch categories from your database table
-        // Replace 'categorias' with your actual categories table name if different
         const { data, error } = await supabase
           .from('categorias')
-          .select('id, nombre, slug'); // Select relevant category fields
+          .select('id, nombre, slug, imagen_url');
 
         if (error) {
           console.error('Error fetching categories:', error);
@@ -46,7 +44,7 @@ export default function CategoriesPage() {
     }
 
     fetchCategories();
-  }, []); // Empty dependency array means this runs once on mount
+  }, []);
 
   return (
     <div className="min-h-screen bg-[#f5f8ff]">
@@ -67,18 +65,26 @@ export default function CategoriesPage() {
         )}
 
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-          {!isLoading &&
-            !error &&
-            categories.map((category) => (
-              // Link to the products page, filtering by the category slug
-              <Link key={category.id} href={`/productos?categoria=${category.slug}`} passHref>
-                {/* This is a basic example, you might want a more complex CategoryCard component */}
-                <div className="bg-white rounded-lg shadow-sm p-6 text-center hover:shadow-md transition-shadow cursor-pointer">
+          {!isLoading && !error && categories.map((category) => (
+            <Link key={category.id} href={`/productos?categoria=${category.slug}`} passHref>
+              <div className="bg-white rounded-lg shadow-sm text-center hover:shadow-md transition-shadow cursor-pointer overflow-hidden">
+                {category.imagen_url && (
+                  <div className="relative aspect-square">
+                    <Image
+                      src={category.imagen_url}
+                      alt={category.nombre}
+                      fill
+                      className="object-contain p-4"
+                      sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 25vw"
+                    />
+                  </div>
+                )}
+                <div className="p-4">
                   <h2 className="text-xl font-semibold text-gray-800">{category.nombre}</h2>
-                  {/* Add category image or icon here if available */}
                 </div>
-              </Link>
-            ))}
+              </div>
+            </Link>
+          ))}
         </div>
       </div>
     </div>

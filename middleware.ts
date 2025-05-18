@@ -1,60 +1,70 @@
-import { NextResponse } from "next/server"
-import type { NextRequest } from "next/server"
-import { createMiddlewareClient } from "@supabase/auth-helpers-nextjs"
+// middleware.ts (Logs detallados)
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs';
+import { NextResponse } from 'next/server';
+import type { NextRequest } from 'next/server';
+import type { Database } from '@/types/database.types'; // Asegúrate de que esta ruta sea correcta
 
 export async function middleware(req: NextRequest) {
-  console.log("Middleware running for path:", req.nextUrl.pathname); // Log the path
+  const path = req.nextUrl.pathname;
+  console.log(`[MIDDLEWARE START] Procesando ruta: ${path}`);
 
-  const res = NextResponse.next()
-  const supabase = createMiddlewareClient({ req, res })
+  // --- Nuevo Logging Añadido ---
+  console.log(`[MIDDLEWARE] Request Headers para ${path}:`);
+  req.headers.forEach((value, name) => {
+    // Evitar loggear el header 'cookie' completo por seguridad si es muy largo, o loggearlo cuidadosamente.
+    // Para depuración, loggeamos todos excepto el Authorization header si estuviera presente.
+     if (name.toLowerCase() === 'cookie') {
+        console.log(`[MIDDLEWARE]   Cookie: ${value}`);
+     } else if (name.toLowerCase() !== 'authorization') {
+        console.log(`[MIDDLEWARE]   ${name}: ${value}`);
+     }
+  });
 
-  // Log incoming cookies in middleware
-  console.log("Incoming cookies in middleware:", req.headers.get('cookie'));
+  console.log(`[MIDDLEWARE] Request Cookies colección para ${path}:`);
+  // Corregido: Usar for...of para iterar sobre req.cookies
+  for (const [name, value] of req.cookies) {
+    console.log(`[MIDDLEWARE]   Cookie - ${name}: ${value}`);
+  }
+  // --- Fin Nuevo Logging Añadido ---
 
-  // Refresh the session — this will also set the cookie
-  // and is important for the server components to receive the authenticated session.
-  // This should also process the session from the URL after an OAuth redirect.
-  await supabase.auth.getSession();
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient<Database>({ req, res });
 
-  // Now, verify if the user is authenticated after ensuring the session is refreshed.
-  const { data: { session }, error: sessionError } = await supabase.auth.getSession(); // Capture error as well
+  // Verificar si la cookie de autenticación está presente antes de getSession
+  // !!! VERIFICA ESTE NOMBRE DE COOKIE - Cópialo de las herramientas de tu navegador !!!
+  const authCookieName = 'sb-qoqchpazcfstknthdizp-auth-token'; // <--- ¡¡¡VERIFICA Y CORRIGE SI ES NECESARIO!!!
+  const authCookieBefore = req.cookies.get(authCookieName);
+  console.log(`[MIDDLEWARE] Cookie '${authCookieName}' en la solicitud ANTES de getSession: ${authCookieBefore ? 'Presente' : 'Faltante'}`);
 
-  // Rutas protegidas que requieren autenticación
-  const protectedRoutes = ["/cuenta", "/cuenta/pedidos", "/cuenta/favoritos"]; // Exclude /checkout temporarily
 
-  // Verificar si la ruta actual está protegida
-  const isProtectedRoute = protectedRoutes.some((route) => req.nextUrl.pathname.startsWith(route));
-
-  // If the user is trying to access a protected route and is NOT authenticated,
-  // AND the current path is NOT the Supabase auth callback route, redirect to login.
-  // We explicitly allow the auth callback to pass through so the client-side can handle it.
-  // Also, add a check to ensure we are not already on the login page to prevent infinite redirects.
-  const isOnAuthPage = req.nextUrl.pathname === "/login" || req.nextUrl.pathname === "/registro";
-  const isAuthCallback = req.nextUrl.pathname.startsWith('/auth/callback');
-
-  if (isProtectedRoute && !session && !isOnAuthPage && !isAuthCallback) {
-    console.log("Middleware: Protected route, no session, redirecting to login."); // Log the redirect
-    const redirectUrl = new URL("/login", req.url);
-    redirectUrl.searchParams.set("redirect", req.nextUrl.pathname);
-    return NextResponse.redirect(redirectUrl);
+  // Esto refresca la sesión y actualiza las cookies en la respuesta
+  // Es CRUCIAL para que los Server Components reciban la sesión autenticada.
+  console.log(`[MIDDLEWARE] Llamando a supabase.auth.getSession() para ${path}...`);
+  const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+  console.log(`[MIDDLEWARE] Resultado de getSession() para ${path}: Sesión presente? ${!!session}, Usuario presente? ${!!session?.user}, Error? ${!!sessionError}`);
+  if (sessionError) {
+    console.error('[MIDDLEWARE] Error en getSession():', sessionError);
+  }
+  if (session?.user) {
+      console.log(`[MIDDLEWARE] User ID from session for ${path}: ${session.user.id}`);
   }
 
-  // If the user is authenticated and tries to access login/register, redirect to account
-  if (isOnAuthPage && session) {
-     console.log("Middleware: Authenticated user on auth page, redirecting to home."); // Log this redirect
-    return NextResponse.redirect(new URL("/", req.url)); // Redirect to home page instead of account
-  }
 
-  console.log("Middleware: Allowing request to proceed."); // Log when request proceeds
+  // Verificar si la cookie de autenticación está presente en la respuesta DESPUÉS de getSession
+  const authCookieAfter = res.cookies.get(authCookieName); // <--- ¡¡¡USA EL MISMO NOMBRE DE COOKIE!!!
+  console.log(`[MIDDLEWARE] Cookie '${authCookieName}' en la RESPUESTA DESPUÉS de getSession: ${authCookieAfter ? 'Presente' : 'Faltante'}`);
+
+
+  console.log(`[MIDDLEWARE END] Ruta procesada: ${path}`);
   return res;
 }
 
 export const config = {
   matcher: [
-    "/cuenta/:path*",
-    "/checkout/:path*",
-    "/login",
-    "/registro",
-    "/auth/callback", // Explicitly match the auth callback route
+    /*
+     * Aplica el middleware a todas las rutas excepto archivos estáticos, optimización de imágenes,
+     * favicon y archivos en la carpeta public.
+     */
+    '/((?!_next/static|_next/image|favicon.ico|.*\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 };
