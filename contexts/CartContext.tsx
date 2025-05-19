@@ -13,7 +13,7 @@ type CartItem = {
   producto_id: string
   variante_id: string | null
   cantidad: number
-  producto?: Producto
+  producto?: Omit<Producto, 'imagen_url'> & { imagenes_producto: { url: string, es_principal: boolean }[] | null }
   variante?: VariantesProducto | null
 }
 
@@ -131,6 +131,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             // Use the single 'supabase' client for this insert
             // This INSERT relies on the allow_anon_create_cart RLS policy
+            if (currentSessionId) {
             const { data: newAnonCart, error: createAnonError } = await supabase
               .from("carritos")
               .insert(insertData)
@@ -149,6 +150,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             setCarritoId(newAnonCart.id)
             console.log("initCart: CarritoId set to (created anon):", newAnonCart.id);
              setItems([]); // New cart is empty initially
+            } else {
+              console.error("initCart: Cannot create anonymous cart: currentSessionId is null or undefined.");
+              setCarritoId(null);
+              setItems([]);
+            }
           }
         } else { // User is authenticated based on useAuth
           console.log("initCart: User is authenticated (based on useAuth). Trying authenticated flow.");
@@ -391,8 +397,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           producto_id,
           variante_id,
           cantidad,
-          productos (imagen_url),
-          variantes:variante_id (*)
+          producto:productos (
+            id,
+            nombre,
+            precio,
+            precio_descuento,
+            imagenes_producto(url, es_principal)
+          ),
+          variante:variantes_producto (
+            id,
+            nombre,
+            precio_adicional
+          )
         `
         )
         .eq("carrito_id", id);
@@ -410,8 +426,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
         producto_id: item.producto_id,
         variante_id: item.variante_id,
         cantidad: item.cantidad,
-        producto: item.productos as Producto,
-        variante: item.variantes as VariantesProducto | null,
+        producto: item.producto ? {
+          ...item.producto,
+          imagen_url: item.producto.imagenes_producto?.find((img: any) => img.es_principal)?.url || item.producto.imagenes_producto?.[0]?.url || "/placeholder.svg"
+        } : undefined,
+        variante: item.variante as VariantesProducto | null,
       }));
 
       console.log("loadCartItems: Transformed cart items for state:", cartItems);
@@ -486,8 +505,18 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
              producto_id,
              variante_id,
              cantidad,
-             productos:producto_id (*),
-             variantes:variante_id (*)
+             producto:productos (
+               id,
+               nombre,
+               precio,
+               precio_descuento,
+               imagenes_producto(url, es_principal)
+             ),
+             variante:variantes_producto (
+               id,
+               nombre,
+               precio_adicional
+             )
           `
                 )
           .single();
@@ -504,8 +533,11 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             producto_id: newItem.producto_id,
             variante_id: newItem.variante_id,
             cantidad: newItem.cantidad,
-            producto: newItem.productos as Producto,
-            variante: newItem.variantes as VariantesProducto | null,
+            producto: newItem.producto ? {
+              ...newItem.producto,
+              imagen_url: newItem.producto.imagenes_producto?.find((img: any) => img.es_principal)?.url || newItem.producto.imagenes_producto?.[0]?.url || "/placeholder.svg"
+            } : undefined,
+            variante: newItem.variante as VariantesProducto | null,
         };
 
         console.log("addItem: Adding new item to local state:", addedItem);

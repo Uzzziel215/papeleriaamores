@@ -1,0 +1,742 @@
+-- Script Definitivo para Replicar la Base de Datos con Políticas de RLS
+
+-- 1. Eliminar políticas de RLS redundantes o en español
+DROP POLICY IF EXISTS "Usuarios pueden crear detalles para sus propios pedidos" ON public.detalles_pedido;
+DROP POLICY IF EXISTS "Usuarios pueden ver detalles de sus propios pedidos" ON public.detalles_pedido;
+DROP POLICY IF EXISTS "Usuarios pueden gestionar sus propias direcciones" ON public.direcciones;
+DROP POLICY IF EXISTS "Usuarios pueden ver sus propias direcciones" ON public.direcciones;
+DROP POLICY IF EXISTS "Usuarios pueden gestionar sus propios favoritos" ON public.favoritos;
+DROP POLICY IF EXISTS "Usuarios pueden ver sus propios favoritos" ON public.favoritos;
+DROP POLICY IF EXISTS "Usuarios pueden crear sus propios pedidos" ON public.pedidos;
+DROP POLICY IF EXISTS "Usuarios pueden ver sus propios pedidos" ON public.pedidos;
+DROP POLICY IF EXISTS "Usuarios pueden actualizar su propio perfil" ON public.perfiles_usuario;
+DROP POLICY IF EXISTS "Usuarios pueden ver su propio perfil" ON public.perfiles_usuario;
+DROP POLICY IF EXISTS "Productos visibles para todos" ON public.productos;
+DROP POLICY IF EXISTS "Usuarios pueden editar sus propias reseñas" ON public.resenas;
+DROP POLICY IF EXISTS "Usuarios pueden eliminar sus propias reseñas" ON public.resenas;
+
+-- 2. Crear extensiones si no existen
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "pg_trgm";
+
+-- 3. Crear tipo enumerado para el estado de los pedidos
+CREATE TYPE public.estado_pedido AS ENUM ('pendiente', 'procesando', 'enviado', 'entregado', 'cancelado');
+
+-- 4. Crear tablas
+
+-- Tabla de Categorías
+CREATE TABLE public.categorias (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  nombre VARCHAR(100) NOT NULL,
+  descripcion TEXT,
+  imagen_url TEXT,
+  slug VARCHAR(100) NOT NULL UNIQUE,
+  orden INTEGER DEFAULT 0,
+  activo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_categorias_slug ON public.categorias (slug);
+
+-- Tabla de Productos
+CREATE TABLE public.productos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  categoria_id UUID REFERENCES public.categorias(id) ON DELETE SET NULL,
+  nombre VARCHAR(255) NOT NULL,
+  descripcion TEXT,
+  descripcion_larga TEXT,
+  precio DECIMAL(10, 2) NOT NULL CHECK (precio >= 0),
+  precio_descuento DECIMAL(10, 2) CHECK (precio_descuento IS NULL OR precio_descuento >= 0),
+  porcentaje_descuento INTEGER CHECK (porcentaje_descuento IS NULL OR (porcentaje_descuento >= 0 AND porcentaje_descuento <= 100)),
+  sku VARCHAR(50) UNIQUE,
+  stock INTEGER NOT NULL DEFAULT 0 CHECK (stock >= 0),
+  marca VARCHAR(100),
+  destacado BOOLEAN DEFAULT false,
+  nuevo BOOLEAN DEFAULT false,
+  activo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  metadata JSONB
+);
+CREATE INDEX idx_productos_categoria ON public.productos (categoria_id);
+CREATE INDEX idx_productos_nombre ON public.productos USING gin (nombre gin_trgm_ops);
+CREATE INDEX idx_productos_sku ON public.productos (sku);
+CREATE INDEX idx_productos_destacado ON public.productos (destacado) WHERE destacado = true;
+
+-- Tabla de Imágenes de Productos
+CREATE TABLE public.imagenes_producto (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
+  url TEXT NOT NULL,
+  alt_text VARCHAR(255),
+  es_principal BOOLEAN DEFAULT false,
+  orden INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_imagenes_producto_producto ON public.imagenes_producto (producto_id);
+
+-- Tabla de Variantes de Producto
+CREATE TABLE public.variantes_producto (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
+  nombre VARCHAR(255) NOT NULL,
+  tipo VARCHAR(100) NOT NULL,
+  valor VARCHAR(255) NOT NULL,
+  codigo_sku VARCHAR(50),
+  precio_adicional DECIMAL(10, 2) DEFAULT 0.00,
+  stock INTEGER DEFAULT 0 CHECK (stock >= 0),
+  activo BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_variantes_producto_producto ON public.variantes_producto (producto_id);
+
+-- Tabla de Perfiles de Usuario
+CREATE TABLE public.perfiles_usuario (
+  id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  nombre VARCHAR(100),
+  apellidos VARCHAR(100),
+  telefono VARCHAR(20),
+  fecha_nacimiento DATE,
+  genero VARCHAR(20),
+  imagen_perfil TEXT,
+  cliente_desde TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Tabla de Direcciones
+CREATE TABLE public.direcciones (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  nombre VARCHAR(100) NOT NULL,
+  destinatario VARCHAR(255) NOT NULL,
+  calle TEXT NOT NULL,
+  detalles TEXT,
+  codigo_postal VARCHAR(10) NOT NULL,
+  ciudad VARCHAR(100) NOT NULL,
+  provincia VARCHAR(100) NOT NULL,
+  pais VARCHAR(100) DEFAULT 'España',
+  telefono VARCHAR(20),
+  es_predeterminada BOOLEAN DEFAULT false,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_direcciones_usuario ON public.direcciones (usuario_id);
+
+-- Tabla de Pedidos
+CREATE TABLE public.pedidos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID NOT NULL REFERENCES auth.users(id),
+  numero_pedido VARCHAR(50) NOT NULL UNIQUE,
+  estado estado_pedido NOT NULL DEFAULT 'pendiente',
+  subtotal DECIMAL(10, 2) NOT NULL CHECK (subtotal >= 0),
+  descuento DECIMAL(10, 2) DEFAULT 0 CHECK (descuento >= 0),
+  total DECIMAL(10, 2) NOT NULL CHECK (total >= 0),
+  direccion_envio_id UUID REFERENCES public.direcciones(id),
+  notas TEXT,
+  fecha_pedido TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_pedidos_usuario ON public.pedidos (usuario_id);
+CREATE INDEX idx_pedidos_numero ON public.pedidos (numero_pedido);
+CREATE INDEX idx_pedidos_estado ON public.pedidos (estado);
+
+-- Tabla de Detalles de Pedido
+CREATE TABLE public.detalles_pedido (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  pedido_id UUID NOT NULL REFERENCES public.pedidos(id) ON DELETE CASCADE,
+  producto_id UUID NOT NULL REFERENCES public.productos(id),
+  variante_id UUID REFERENCES public.variantes_producto(id),
+  cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+  precio_unitario DECIMAL(10, 2) NOT NULL CHECK (precio_unitario >= 0),
+  subtotal DECIMAL(10, 2) NOT NULL CHECK (subtotal >= 0),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_detalles_pedido_pedido ON public.detalles_pedido (pedido_id);
+CREATE INDEX idx_detalles_pedido_producto ON public.detalles_pedido (producto_id);
+
+-- Tabla de Carrito de Compra
+CREATE TABLE public.carritos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID REFERENCES auth.users(id) ON DELETE SET NULL,
+  session_id VARCHAR(255),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW(),
+  CONSTRAINT check_usuario_o_session CHECK ((usuario_id IS NOT NULL) OR (session_id IS NOT NULL))
+);
+CREATE INDEX idx_carritos_usuario ON public.carritos (usuario_id);
+CREATE INDEX idx_carritos_session ON public.carritos (session_id);
+
+-- Tabla de Elementos del Carrito
+CREATE TABLE public.elementos_carrito (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  carrito_id UUID NOT NULL REFERENCES public.carritos(id) ON DELETE CASCADE,
+  producto_id UUID NOT NULL REFERENCES public.productos(id),
+  variante_id UUID REFERENCES public.variantes_producto(id),
+  cantidad INTEGER NOT NULL CHECK (cantidad > 0),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_elementos_carrito_carrito ON public.elementos_carrito (carrito_id);
+CREATE INDEX idx_elementos_carrito_producto ON public.elementos_carrito (producto_id);
+
+-- Tabla de Favoritos
+CREATE TABLE public.favoritos (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  usuario_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  UNIQUE (usuario_id, producto_id)
+);
+CREATE INDEX idx_favoritos_usuario ON public.favoritos (usuario_id);
+CREATE INDEX idx_favoritos_producto ON public.favoritos (producto_id);
+
+-- Tabla de Reseñas
+CREATE TABLE public.resenas (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  producto_id UUID NOT NULL REFERENCES public.productos(id) ON DELETE CASCADE,
+  usuario_id UUID NOT NULL REFERENCES auth.users(id),
+  titulo VARCHAR(255) NOT NULL,
+  contenido TEXT NOT NULL,
+  valoracion INTEGER NOT NULL CHECK (valoracion >= 1 AND valoracion <= 5),
+  aprobado BOOLEAN DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+CREATE INDEX idx_resenas_producto ON public.resenas (producto_id);
+CREATE INDEX idx_resenas_usuario ON public.resenas (usuario_id);
+CREATE INDEX idx_resenas_valoracion ON public.resenas (valoracion);
+
+-- Tabla temporal para pedidos pendientes que activarán el trigger
+CREATE TABLE public.ordenes_pendientes_trigger (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  cart_id_input UUID NOT NULL,
+  shipping_address_id_input UUID,
+  order_notes_input TEXT,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 5. Crear secuencia para generar números de pedido
+CREATE SEQUENCE IF NOT EXISTS seq_pedidos START 1;
+
+-- 6. Definir funciones personalizadas
+
+-- Función para actualizar el timestamp 'updated_at'
+CREATE OR REPLACE FUNCTION public.set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para generar automáticamente números de pedido
+CREATE OR REPLACE FUNCTION public.generar_numero_pedido()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.numero_pedido := 'PA-' || to_char(NOW(), 'YYMM') || LPAD(NEXTVAL('seq_pedidos')::text, 4, '0');
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Función para obtener productos filtrados con valoración
+CREATE OR REPLACE FUNCTION public.get_filtered_products_with_rating(
+  category_slugs TEXT[] DEFAULT NULL,
+  price_min DECIMAL(10, 2) DEFAULT 0,
+  price_max DECIMAL(10, 2) DEFAULT 1000,
+  brands TEXT[] DEFAULT NULL,
+  min_rating INTEGER DEFAULT 0,
+  is_in_stock BOOLEAN DEFAULT FALSE,
+  is_on_offer BOOLEAN DEFAULT FALSE,
+  sort_by TEXT DEFAULT 'relevance',
+  page_limit INTEGER DEFAULT 24,
+  page_offset INTEGER DEFAULT 0
+)
+RETURNS TABLE (
+  id UUID,
+  nombre VARCHAR,
+  descripcion TEXT,
+  precio DECIMAL(10, 2),
+  precio_descuento DECIMAL(10, 2),
+  porcentaje_descuento INTEGER,
+  sku VARCHAR,
+  stock INTEGER,
+  marca VARCHAR,
+  destacado BOOLEAN,
+  nuevo BOOLEAN,
+  activo BOOLEAN,
+  created_at TIMESTAMPTZ,
+  updated_at TIMESTAMPTZ,
+  metadata JSONB,
+  categoria_id UUID,
+  valoracion_promedio DECIMAL(10, 2)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  category_ids UUID[];
+BEGIN
+  IF category_slugs IS NOT NULL AND array_length(category_slugs, 1) > 0 THEN
+    SELECT ARRAY(
+      SELECT id
+      FROM public.categorias
+      WHERE slug = ANY(category_slugs)
+    ) INTO category_ids;
+  END IF;
+
+  RETURN QUERY
+  SELECT
+    p.id,
+    p.nombre,
+    p.descripcion,
+    p.precio,
+    p.precio_descuento,
+    p.porcentaje_descuento,
+    p.sku,
+    p.stock,
+    p.marca,
+    p.destacado,
+    p.nuevo,
+    p.activo,
+    p.created_at,
+    p.updated_at,
+    p.metadata,
+    p.categoria_id,
+    COALESCE(vp.valoracion_promedio, 0) AS valoracion_promedio
+  FROM
+    public.productos p
+  LEFT JOIN
+    public.valoraciones_producto vp ON p.id = vp.producto_id
+  WHERE
+    p.activo IS TRUE
+    AND p.precio >= price_min
+    AND p.precio <= price_max
+    AND (category_slugs IS NULL OR array_length(category_slugs, 1) = 0 OR p.categoria_id = ANY(category_ids))
+    AND (brands IS NULL OR array_length(brands, 1) = 0 OR p.marca = ANY(brands))
+    AND (COALESCE(vp.valoracion_promedio, 0) >= min_rating)
+    AND (
+      (is_in_stock IS FALSE OR p.stock > 0)
+      AND (is_on_offer IS FALSE OR (p.precio_descuento IS NOT NULL AND p.precio_descuento < p.precio))
+    )
+  ORDER BY
+    CASE WHEN sort_by = 'price_asc' THEN p.precio END ASC,
+    CASE WHEN sort_by = 'price_desc' THEN p.precio END DESC,
+    CASE WHEN sort_by = 'newest' THEN p.created_at END DESC,
+    CASE WHEN sort_by = 'rating' THEN COALESCE(vp.valoracion_promedio, 0) END DESC,
+    p.nombre ASC
+  LIMIT page_limit OFFSET page_offset;
+END;
+$$;
+
+-- Función para añadir o eliminar favoritos
+CREATE OR REPLACE FUNCTION public.toggle_favorite(product_id_input UUID, user_id_input UUID)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  is_currently_favorite BOOLEAN;
+BEGIN
+  SELECT EXISTS (
+    SELECT 1 FROM public.favoritos
+    WHERE usuario_id = user_id_input AND producto_id = product_id_input
+  ) INTO is_currently_favorite;
+  IF is_currently_favorite THEN
+    DELETE FROM public.favoritos
+    WHERE usuario_id = user_id_input AND producto_id = product_id_input;
+    RETURN FALSE;
+  ELSE
+    INSERT INTO public.favoritos (usuario_id, producto_id)
+    VALUES (user_id_input, product_id_input);
+    RETURN TRUE;
+  END IF;
+END;
+$$;
+
+-- Función para crear un pedido simulado
+CREATE OR REPLACE FUNCTION public.place_simulated_order(cart_id_input uuid, shipping_address_id_input uuid DEFAULT NULL::uuid, order_notes_input text DEFAULT NULL::text)
+RETURNS uuid
+LANGUAGE plpgsql
+SECURITY DEFINER
+AS $$
+DECLARE
+  v_user_id uuid := auth.uid();
+  v_cart_owner_id uuid;
+  v_total_amount numeric;
+  v_new_order_id uuid;
+BEGIN
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Acceso denegado: Se requiere autenticación para realizar un pedido.';
+  END IF;
+
+  SELECT usuario_id INTO v_cart_owner_id
+  FROM public.carritos
+  WHERE id = cart_id_input;
+
+  IF cart_id_input IS NULL OR NOT FOUND THEN
+    RAISE EXCEPTION 'Carrito no encontrado %', cart_id_input;
+  END IF;
+
+  IF v_cart_owner_id IS NULL OR v_cart_owner_id != v_user_id THEN
+    RAISE EXCEPTION 'Autorización fallida: El usuario autenticado no posee este carrito.';
+  END IF;
+
+  SELECT SUM(eci.cantidad * (p.precio + COALESCE(pv.precio_adicional, 0)))
+  INTO v_total_amount
+  FROM public.elementos_carrito eci
+  JOIN public.productos p ON eci.producto_id = p.id
+  LEFT JOIN public.variantes_producto pv ON eci.variante_id = pv.id
+  WHERE eci.carrito_id = cart_id_input;
+
+  IF v_total_amount IS NULL OR v_total_amount <= 0 THEN
+    PERFORM 1 FROM public.elementos_carrito WHERE carrito_id = cart_id_input;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'El carrito está vacío.';
+    ELSE
+      RAISE EXCEPTION 'El carrito contiene items con precios no válidos.';
+    END IF;
+  END IF;
+
+  IF shipping_address_id_input IS NOT NULL THEN
+    PERFORM 1 FROM public.direcciones WHERE id = shipping_address_id_input AND usuario_id = v_user_id;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'Dirección de envío inválida o no pertenece al usuario.';
+    END IF;
+  END IF;
+
+  INSERT INTO public.pedidos (usuario_id, estado, subtotal, descuento, total, direccion_envio_id, notas)
+  VALUES (
+    v_user_id,
+    'pendiente'::estado_pedido,
+    v_total_amount,
+    0,
+    v_total_amount,
+    shipping_address_id_input,
+    order_notes_input
+  )
+  RETURNING id INTO v_new_order_id;
+
+  INSERT INTO public.detalles_pedido (pedido_id, producto_id, variante_id, cantidad, precio_unitario, subtotal)
+  SELECT
+    v_new_order_id,
+    eci.producto_id,
+    eci.variante_id,
+    eci.cantidad,
+    p.precio + COALESCE(pv.precio_adicional, 0),
+    eci.cantidad * (p.precio + COALESCE(pv.precio_adicional, 0))
+  FROM public.elementos_carrito eci
+  JOIN public.productos p ON eci.producto_id = p.id
+  LEFT JOIN public.variantes_producto pv ON eci.variante_id = pv.id
+  WHERE eci.carrito_id = cart_id_input;
+
+  DELETE FROM public.elementos_carrito
+  WHERE carrito_id = cart_id_input;
+
+  RETURN v_new_order_id;
+
+EXCEPTION
+  WHEN OTHERS THEN
+    RAISE WARNING 'Error placing simulated order for cart % and user %: %', cart_id_input, v_user_id, SQLERRM;
+    RAISE EXCEPTION 'Error al procesar el pago simulado: %', SQLERRM;
+END;
+$$;
+
+-- Función para procesar órdenes pendientes desde el trigger
+CREATE OR REPLACE FUNCTION public.process_pending_order_trigger_func()
+RETURNS TRIGGER AS $$
+BEGIN
+  PERFORM public.place_simulated_order(
+    cart_id_input := NEW.cart_id_input,
+    shipping_address_id_input := NEW.shipping_address_id_input,
+    order_notes_input := NEW.order_notes_input
+  );
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
+
+-- 7. Crear triggers
+
+-- Triggers para actualizar 'updated_at'
+CREATE TRIGGER set_updated_at_productos
+BEFORE UPDATE ON public.productos
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_perfiles_usuario
+BEFORE UPDATE ON public.perfiles_usuario
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_direcciones
+BEFORE UPDATE ON public.direcciones
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_pedidos
+BEFORE UPDATE ON public.pedidos
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_carritos
+BEFORE UPDATE ON public.carritos
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_elementos_carrito
+BEFORE UPDATE ON public.elementos_carrito
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+CREATE TRIGGER set_updated_at_resenas
+BEFORE UPDATE ON public.resenas
+FOR EACH ROW EXECUTE FUNCTION public.set_updated_at();
+
+-- Trigger para generar números de pedido
+CREATE TRIGGER trigger_generar_numero_pedido
+BEFORE INSERT ON public.pedidos
+FOR EACH ROW EXECUTE FUNCTION public.generar_numero_pedido();
+
+-- Trigger para procesar órdenes pendientes
+CREATE TRIGGER trigger_process_pending_order
+AFTER INSERT ON public.ordenes_pendientes_trigger
+FOR EACH ROW EXECUTE FUNCTION public.process_pending_order_trigger_func();
+
+-- 8. Crear vista para valoraciones promedio de productos
+CREATE OR REPLACE VIEW public.valoraciones_producto AS
+SELECT
+  p.id AS producto_id,
+  p.nombre AS producto_nombre,
+  COUNT(r.id) AS total_resenas,
+  COALESCE(AVG(r.valoracion), 0) AS valoracion_promedio
+FROM
+  public.productos p
+LEFT JOIN
+  public.resenas r ON p.id = r.producto_id AND r.aprobado = true
+GROUP BY
+  p.id, p.nombre;
+
+-- 9. Habilitar RLS (Row-Level Security) en las tablas
+ALTER TABLE public.carritos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.categorias ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.detalles_pedido ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.direcciones ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.elementos_carrito ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.favoritos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.imagenes_producto ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.pedidos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.perfiles_usuario ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.productos ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.resenas ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.variantes_producto ENABLE ROW LEVEL SECURITY;
+
+-- 10. Crear políticas de RLS correctas
+
+-- Políticas para public.carritos
+-- Usuarios autenticados pueden gestionar sus propios carritos
+CREATE POLICY "Authenticated users full access to own cart"
+ON public.carritos
+FOR ALL
+TO authenticated
+USING (auth.uid() = usuario_id)
+WITH CHECK (auth.uid() = usuario_id);
+
+-- Usuarios anónimos pueden insertar carritos con session_id
+CREATE POLICY "Anonymous can insert cart with session_id"
+ON public.carritos
+FOR INSERT
+TO anon
+WITH CHECK (usuario_id IS NULL AND session_id IS NOT NULL);
+
+-- Usuarios anónimos pueden seleccionar su carrito usando session_id
+CREATE POLICY "Anonymous can select cart by session_id"
+ON public.carritos
+FOR SELECT
+TO anon
+USING (session_id = current_setting('request.headers', true)::json->>'x-session-id');
+
+-- Usuarios anónimos pueden actualizar su carrito usando session_id
+CREATE POLICY "Anonymous can update cart by session_id"
+ON public.carritos
+FOR UPDATE
+TO anon
+USING (session_id = current_setting('request.headers', true)::json->>'x-session-id');
+
+-- Usuarios anónimos pueden eliminar su carrito usando session_id
+CREATE POLICY "Anonymous can delete cart by session_id"
+ON public.carritos
+FOR DELETE
+TO anon
+USING (session_id = current_setting('request.headers', true)::json->>'x-session-id');
+
+-- Políticas para public.categorias
+CREATE POLICY "Allow read access to categories"
+ON public.categorias
+FOR SELECT
+TO public
+USING (true);
+
+-- Políticas para public.detalles_pedido
+CREATE POLICY "Allow users to view their own order details"
+ON public.detalles_pedido
+FOR SELECT
+TO authenticated
+USING (EXISTS (SELECT 1 FROM public.pedidos WHERE pedidos.id = detalles_pedido.pedido_id AND pedidos.usuario_id = auth.uid()));
+
+-- Políticas para public.direcciones
+CREATE POLICY "Allow users to manage their own addresses"
+ON public.direcciones
+FOR ALL
+TO authenticated
+USING (usuario_id = auth.uid());
+
+-- Políticas para public.elementos_carrito
+CREATE POLICY "Allow owner manage cart items"
+ON public.elementos_carrito
+FOR ALL
+TO authenticated
+USING (carrito_id IN (SELECT id FROM public.carritos WHERE usuario_id = auth.uid()));
+
+CREATE POLICY "Allow anon manage cart items by session_id"
+ON public.elementos_carrito
+FOR ALL
+TO anon
+USING (carrito_id IN (SELECT id FROM public.carritos WHERE session_id = current_setting('request.headers', true)::json->>'x-session-id'));
+
+-- Políticas para public.favoritos
+CREATE POLICY "Allow users to manage their own favorites"
+ON public.favoritos
+FOR ALL
+TO authenticated
+USING (usuario_id = auth.uid());
+
+-- Políticas para public.imagenes_producto
+CREATE POLICY "Allow read access to product images"
+ON public.imagenes_producto
+FOR SELECT
+TO public
+USING (true);
+
+-- Políticas para public.pedidos
+CREATE POLICY "Allow users to view their own orders"
+ON public.pedidos
+FOR SELECT
+TO authenticated
+USING (usuario_id = auth.uid());
+
+-- Políticas para public.perfiles_usuario
+CREATE POLICY "Allow authenticated view own profile"
+ON public.perfiles_usuario
+FOR SELECT
+TO authenticated
+USING (id = auth.uid());
+
+CREATE POLICY "Allow authenticated update own profile"
+ON public.perfiles_usuario
+FOR UPDATE
+TO authenticated
+USING (id = auth.uid());
+
+-- Políticas para public.productos
+CREATE POLICY "Allow public read access to products"
+ON public.productos
+FOR SELECT
+TO public
+USING (true);
+
+-- Políticas para public.resenas
+CREATE POLICY "Allow read approved reviews"
+ON public.resenas
+FOR SELECT
+TO public
+USING (aprobado = TRUE);
+
+CREATE POLICY "Allow authenticated users insert own reviews"
+ON public.resenas
+FOR INSERT
+TO authenticated
+WITH CHECK (usuario_id = auth.uid());
+
+CREATE POLICY "Allow authenticated users update own reviews"
+ON public.resenas
+FOR UPDATE
+TO authenticated
+USING (usuario_id = auth.uid());
+
+CREATE POLICY "Allow authenticated users delete own reviews"
+ON public.resenas
+FOR DELETE
+TO authenticated
+USING (usuario_id = auth.uid());
+
+-- Políticas para public.variantes_producto
+CREATE POLICY "Allow read access to product variants"
+ON public.variantes_producto
+FOR SELECT
+TO public
+USING (true);
+
+-- Script 1: Crear la tabla admin_users si no existe
+CREATE TABLE public.admin_users (
+  user_id UUID PRIMARY KEY REFERENCES auth.users(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Habilita RLS para la tabla admin_users
+ALTER TABLE public.admin_users ENABLE ROW LEVEL SECURITY;
+
+-- Política para permitir a los administradores (quienes ya están en la tabla) ver esta tabla (opcional, para gestionar otros admins)
+CREATE POLICY "Administrators can view admin_users"
+ON public.admin_users
+FOR SELECT
+USING ( auth.uid() IN ( SELECT user_id FROM public.admin_users ) );
+
+-- Política para permitir a los administradores (quienes ya están en la tabla) insertar nuevos administradores (úsalas con cuidado)
+CREATE POLICY "Administrators can insert other administrators"
+ON public.admin_users
+FOR INSERT
+WITH CHECK ( auth.uid() IN ( SELECT user_id FROM public.admin_users ) );
+
+-- Política para permitir a los administradores (quienes ya están en la tabla) eliminar administradores (úsalas con cuidado)
+CREATE POLICY "Administrators can delete other administrators"
+ON public.admin_users
+FOR DELETE
+USING ( auth.uid() IN ( SELECT user_id FROM public.admin_users ) );
+
+-- Asegúrate de insertar tu user_id manualmente en esta tabla después de crearla para poder probar.
+-- Ejemplo: INSERT INTO public.admin_users (user_id) VALUES ('tu_user_id_aqui');
+
+-- Script 2: Agregar políticas de RLS para INSERT por administradores
+
+-- Política para permitir a los administradores insertar productos
+-- Asume que la tabla admin_users existe y contiene los IDs de los administradores
+CREATE POLICY "Administrators can insert products"
+ON public.productos
+FOR INSERT
+WITH CHECK ( auth.uid() IN ( SELECT user_id FROM public.admin_users ) );
+
+-- Política para permitir a los administradores insertar imágenes de productos
+-- Asume que la tabla admin_users existe
+CREATE POLICY "Administrators can insert product images"
+ON public.imagenes_producto
+FOR INSERT
+WITH CHECK ( auth.uid() IN ( SELECT user_id FROM public.admin_users ) );
+
+-- Script para añadir un usuario específico como administrador
+
+-- Asegúrate de que la tabla admin_users existe antes de ejecutar esto.
+-- (Ya la creamos en un paso anterior).
+
+-- Inserta el user_id proporcionado en la tabla admin_users.
+-- Si el user_id ya existe en la tabla (aunque no debería si sigues estos pasos),
+-- esta inserción fallará debido a la restricción PRIMARY KEY (lo cual es correcto).
+INSERT INTO public.admin_users (user_id)
+VALUES ('438cecdb-622f-4707-ad50-180501c0455a');
+
+-- Opcional: Puedes verificar si la inserción fue exitosa seleccionando la tabla
+-- SELECT * FROM public.admin_users;
+
+
+-- SQL Script to add RLS policy for authenticated users to read their own admin_users row
+
+CREATE POLICY "Allow authenticated users to read their own admin_users row"
+ON public.admin_users
+FOR SELECT
+TO authenticated
+USING ( auth.uid() = user_id );
+

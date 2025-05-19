@@ -16,6 +16,7 @@ const AddProductForm = () => {
   const [description, setDescription] = useState('');
   const [selectedCategoryId, setSelectedCategoryId] = useState(''); // Use selectedCategoryId for dropdown
   const [productImage, setProductImage] = useState<File | null>(null);
+  const [stock, setStock] = useState('0'); // Add state for stock, default to '0' as it's a number input value
   const [loading, setLoading] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -81,6 +82,7 @@ const AddProductForm = () => {
     if (description) formData.append('descripcion', description);
     if (selectedCategoryId) formData.append('categoria_id', selectedCategoryId); // Use selectedCategoryId
     formData.append('image', productImage);
+    formData.append('stock', stock); // Add stock to formData
 
     try {
       // *** Incluir el token en la cabecera Authorization ***
@@ -103,6 +105,7 @@ const AddProductForm = () => {
         setDescription('');
         setSelectedCategoryId('');
         setProductImage(null);
+        setStock('0'); // Reset stock field
       } else {
         // Attempt to parse error details from the response body
         let errorDetails = 'Error desconocido';
@@ -239,6 +242,19 @@ const AddProductForm = () => {
           className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
           required
         ></textarea>
+      </div>
+
+      <div>
+        <label htmlFor="stock" className="block text-sm font-medium text-gray-700">Stock</label>
+        <input
+          type="number"
+          id="stock"
+          value={stock}
+          onChange={(e) => setStock(e.target.value)}
+          className="mt-1 block w-full border border-gray-300 rounded-md shadow-sm p-2"
+          min="0" // Ensure stock is not negative
+          required
+        />
       </div>
 
       <div>

@@ -11,6 +11,7 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { AlertCircle } from "lucide-react"
+import Image from "next/image"
 
 // Import supabase client and Google icon
 import { supabase } from "@/lib/supabase";
@@ -141,7 +142,13 @@ export default function LoginPage() {
           onClick={handleGoogleSignIn}
           disabled={isLoading} // Disable while email/password is loading
         >
-          <Chrome className="h-5 w-5 mr-2" /> {/* Google icon */}
+          <Image
+            src="/icons/3.png"
+            alt="Google Logo"
+            width={20} // Adjust size as needed
+            height={20} // Adjust size as needed
+            className="mr-2"
+          />
           Google
         </Button>
 

@@ -10,11 +10,15 @@ interface ProductCardProps {
   price: number
   image: string
   rating: number
-  discount?: number
+  precio_descuento?: number | null
+  porcentaje_descuento?: number | null
+  stock: number
+  isFavorited?: boolean
+  onToggleFavorite?: (id: string) => void
 }
 
-export function ProductCard({ id, name, price, image, rating, discount }: ProductCardProps) {
-  const discountedPrice = discount ? price * (1 - discount / 100) : price
+export function ProductCard({ id, name, price, image, rating, precio_descuento, porcentaje_descuento, stock, isFavorited, onToggleFavorite }: ProductCardProps) {
+  const displayedPrice = precio_descuento !== null && precio_descuento !== undefined ? precio_descuento : price;
   const { addItem } = useCart() // Use the useCart hook
 
   const handleAddToCart = () => {
@@ -33,50 +37,50 @@ export function ProductCard({ id, name, price, image, rating, discount }: Produc
           />
         </Link>
 
-        {discount && (
+        {precio_descuento !== null && precio_descuento !== undefined && porcentaje_descuento !== null && porcentaje_descuento !== undefined && porcentaje_descuento > 0 && (
           <div className="absolute top-3 left-3 bg-[#ff6b6b] text-white text-sm font-medium px-2 py-1 rounded">
-            -{discount}%
+            -{porcentaje_descuento}%
           </div>
         )}
 
-        <div className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-opacity">
-          <Button variant="outline" size="icon" className="h-8 w-8 rounded-full bg-white">
-            <Heart className="h-4 w-4" />
+        <div className="absolute top-3 right-3 opacity-100 transition-opacity">
+          <Button
+            variant={isFavorited ? "default" : "outline"}
+            size="icon"
+            className={`h-8 w-8 rounded-full bg-white ${isFavorited ? "text-[#ff6b6b]" : ""}`}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              onToggleFavorite && onToggleFavorite(id);
+            }}
+            aria-label={isFavorited ? "Quitar de favoritos" : "Agregar a favoritos"}
+          >
+            <Heart className={`h-4 w-4 ${isFavorited ? "fill-current" : ""}`} />
           </Button>
         </div>
       </div>
 
       <div className="p-4">
-        <div className="flex items-center mb-1">
-          <div className="flex">
-            {[...Array(5)].map((_, i) => (
-              <Star
-                key={i}
-                className={`h-3 w-3 ${i < Math.floor(rating) ? "text-yellow-400 fill-yellow-400" : "text-gray-300"}`}
-              />
-            ))}
-          </div>
-          <span className="ml-1 text-xs text-gray-500">{rating}</span>
+        <h3 className="font-semibold text-lg mb-1">
+          <Link href={`/productos/${id}`}>{name}</Link>
+        </h3>
+        <div className="flex items-center mb-2">
+          {[...Array(5)].map((_, i) => (
+            <Star key={i} className={`w-4 h-4 ${i < rating ? "text-yellow-400 fill-yellow-400" : "text-gray-300 fill-gray-300"}`} />
+          ))}
         </div>
-
-        <Link href={`/productos/${id}`}>
-          <h3 className="font-medium mb-1 hover:text-[#0084cc] transition-colors">{name}</h3>
-        </Link>
-
+        <div className="flex items-center space-x-2 mb-2">
+          <span className="text-xl font-bold text-[#0084cc]">€{displayedPrice}</span>
+          {precio_descuento !== null && precio_descuento !== undefined && (
+            <span className="text-sm line-through text-gray-400">€{price}</span>
+          )}
+        </div>
         <div className="flex items-center justify-between">
-          <div>
-            <span className="font-semibold text-[#0084cc]">€{discountedPrice.toFixed(2)}</span>
-            {discount && <span className="ml-2 text-sm text-gray-400 line-through">€{price.toFixed(2)}</span>}
-          </div>
-
-          <Button
-            variant="outline"
-            size="icon"
-            className="h-8 w-8 rounded-full border-[#0084cc] text-[#0084cc] hover:bg-[#0084cc] hover:text-white"
-            onClick={handleAddToCart} // Add onClick handler
-          >
-            <ShoppingCart className="h-4 w-4" />
+          <Button size="sm" className="bg-[#0084cc] hover:bg-[#007acc]" onClick={handleAddToCart} disabled={stock === 0}>
+            <ShoppingCart className="h-4 w-4 mr-1" />
+            Añadir
           </Button>
+          <span className={`text-xs font-medium ${stock > 0 ? "text-green-600" : "text-red-600"}`}>{stock > 0 ? "En stock" : "Sin stock"}</span>
         </div>
       </div>
     </div>

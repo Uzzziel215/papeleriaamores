@@ -2,6 +2,7 @@ import type React from "react"
 import "./globals.css"
 import { AuthProvider } from "@/contexts/AuthContext"
 import { CartProvider } from "@/contexts/CartContext"
+import { FavoritosProvider } from "@/contexts/FavoritosContext"
 import { Header } from "@/components/Header"
 import { Footer } from "@/components/Footer"
 
@@ -21,9 +22,11 @@ export default function RootLayout({
       <body>
         <AuthProvider>
           <CartProvider>
-            <Header />
-            <main className="min-h-screen pt-16">{children}</main>
-            <Footer />
+            <FavoritosProvider>
+              <Header />
+              <main className="min-h-screen pt-16">{children}</main>
+              <Footer />
+            </FavoritosProvider>
           </CartProvider>
         </AuthProvider>
       </body>

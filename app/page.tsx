@@ -113,7 +113,7 @@ export default async function InicioPage() {
             </div>
           </div>
           <div className="md:w-1/2 relative"> {/* Added relative position */}
-            <Image src="/hero-image.png" alt="Papelería Amores" width={600} height={500} className="object-contain" />
+            <Image src="/neo-sakura-online-shopping.gif" alt="Oferta Especial" width={600} height={500} className="object-contain" unoptimized />
           </div>
         </div>
       </section>

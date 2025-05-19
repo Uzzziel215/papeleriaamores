@@ -324,9 +324,8 @@ export default function CheckoutPage() {
                     </div>
                     {/* Placeholder card icons */}
                     <div className="flex space-x-2">
-                      <div className="w-10 h-6 bg-gray-200 rounded"></div>
-                      <div className="w-10 h-6 bg-gray-200 rounded"></div>
-                      <div className="w-10 h-6 bg-gray-200 rounded"></div>
+                      <Image src="/icons/1.png" alt="Visa" width={30} height={20} className="object-contain" />
+                      <Image src="/icons/4.png" alt="Mastercard" width={30} height={20} className="object-contain" />
                     </div>
                   </div>
 
@@ -361,7 +360,7 @@ export default function CheckoutPage() {
                       <RadioGroupItem value="paypal" id="paypal" />
                       <Label htmlFor="paypal" className="ml-2">
                         <div className="flex items-center">
-                          <div className="w-6 h-6 bg-gray-200 rounded-full mr-2"></div>
+                          <Image src="/icons/2.png" alt="Paypal" width={24} height={24} className="object-contain mr-2" />
                           <span className="font-medium">PayPal (Simulado)</span>
                         </div>
                       </Label>
@@ -373,7 +372,7 @@ export default function CheckoutPage() {
                       <RadioGroupItem value="transfer" id="transfer" />
                       <Label htmlFor="transfer" className="ml-2">
                         <div className="flex items-center">
-                          <div className="w-6 h-6 bg-gray-200 rounded-full mr-2"></div>
+                          <Image src="/icons/transferencia-movil.png" alt="Transferencia Bancaria" width={24} height={24} className="object-contain mr-2" />
                           <span className="font-medium">Transferencia Bancaria (Simulado)</span>
                         </div>
                       </Label>
@@ -466,7 +465,7 @@ export default function CheckoutPage() {
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
                      {/* Placeholder total - replace with calculated value */} 
-                    <span>€{items.reduce((sum, item) => sum + ((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad, 0).toFixed(2)}</span>
+                    <span>€{items.reduce((sum, item) => sum + (((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * Number(item.cantidad)), 0).toFixed(2)}</span>
                   </div>
                   {/* Placeholder savings */}
                   {/* <div className="text-green-600 text-sm text-right">Ahorras €0.00</div> */}
@@ -475,7 +474,7 @@ export default function CheckoutPage() {
                 <div className="mb-4">
                   <div className="flex items-center mb-3">
                     {/* Connect terms checkbox to state */}
-                    <Checkbox id="terms" checked={termsAccepted} onCheckedChange={setTermsAccepted} />
+                    <Checkbox id="terms" checked={termsAccepted} onCheckedChange={(checkedState) => setTermsAccepted(Boolean(checkedState))} />
                     <label htmlFor="terms" className="ml-2 text-sm">
                       He leído y acepto los{" "}
                       <Link href="/terminos" className="text-[#0084cc] hover:underline">

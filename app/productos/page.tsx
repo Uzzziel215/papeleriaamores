@@ -8,10 +8,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Slider } from "@/components/ui/slider";
 // Importar la instancia de Supabase ya creada
 import { supabase } from "@/lib/supabase";
+import type { Categoria } from "@/types/database.types";
 
 import { useState, useEffect, useCallback } from "react";
 import Image from 'next/image';
-import { useSearchParams } from 'next/navigation'; // Import useSearchParams
+import { useSearchParams, useRouter } from 'next/navigation'; // Import useSearchParams and useRouter
+import { useAuth } from "@/contexts/AuthContext";
 
 // Definir interfaces para los datos devueltos por la RPC
 // Ahora las columnas no tienen el prefijo 'r_'. Coinciden con la tabla productos + valoracion_promedio.
@@ -42,6 +44,7 @@ interface ProductForFrontend {
   precio: number;
   imagenes_producto: { id: string; url: string; alt_text?: string; es_principal: boolean }[]; // Ajustar para incluir id de imagen
   precio_descuento?: number | null;
+  porcentaje_descuento?: number | null; // Añadir porcentaje_descuento
   marca?: string | null;
   stock: number;
   destacado: boolean;
@@ -49,60 +52,146 @@ interface ProductForFrontend {
   rating: number; // Valoración promedio para el ProductCard
 }
 
+// Interfaz para la data de marcas de la base de datos
+interface BrandData { marca: string | null; }
+
 export default function ProductosPage() {
   const searchParams = useSearchParams(); // Get search params
-  const categorySlugFromUrl = searchParams.get('categoria'); // Read 'categoria' parameter
-  const availabilityFromUrl = searchParams.get('availability'); // Read 'availability' parameter
-  const filterFromUrl = searchParams.get('filter'); // Read 'filter' parameter
+  const router = useRouter(); // Get router
+  const { user, isLoading: isLoadingAuth } = useAuth();
+
+  // Read initial filter states from URL search params
+  const getInitialStateFromUrl = () => {
+    const categorySlugs = searchParams.get('categorias')?.split(',').filter(Boolean) || [];
+    const availability = searchParams.get('disponibilidad')?.split(',').filter(Boolean) || [];
+    const filter = searchParams.get('filtro'); // 'featured'
+    const minRatingParam = searchParams.get('valoracion');
+    const priceMinParam = searchParams.get('precio_min');
+    const priceMaxParam = searchParams.get('precio_max');
+    const brandsParam = searchParams.get('marcas')?.split(',').filter(Boolean) || [];
+    const sortParam = searchParams.get('orden') || 'relevance';
+
+    return {
+      initialCategories: categorySlugs,
+      initialAvailability: availability,
+      initialFeatured: filter === 'destacados',
+      initialMinRating: minRatingParam ? parseInt(minRatingParam, 10) : 0,
+      initialPriceRange: [
+        priceMinParam ? parseFloat(priceMinParam) : 0,
+        priceMaxParam ? parseFloat(priceMaxParam) : 1000,
+      ] as [number, number],
+      initialBrands: brandsParam,
+      initialSortOrder: sortParam,
+    };
+  };
+
+  const initialState = getInitialStateFromUrl();
 
   // Initialize selectedCategories state with the category slug from URL if it exists
   const [selectedCategories, setSelectedCategories] = useState<string[]>(
-    categorySlugFromUrl ? [categorySlugFromUrl] : []
+    initialState.initialCategories
   );
 
   const [products, setProducts] = useState<ProductForFrontend[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
+  const [categories, setCategories] = useState<Categoria[]>([]);
   const [brands, setBrands] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
 
   // Estados para otros filtros y ordenamiento
-  const [priceRange, setPriceRange] = useState<[number, number]>([0, 1000]);
-  const [selectedBrands, setSelectedBrands] = useState<string[]>([]);
-  const [minRating, setMinRating] = useState<number>(0);
+  const [priceRange, setPriceRange] = useState<[number, number]>(
+    initialState.initialPriceRange
+  );
+  const [selectedBrands, setSelectedBrands] = useState<string[]>(
+    initialState.initialBrands
+  );
+  const [minRating, setMinRating] = useState<number>(
+    initialState.initialMinRating
+  );
   
   // Initialize availabilityFilters state with 'on-offer' if the URL param is present
   const [availabilityFilters, setAvailabilityFilters] = useState<string[]>(
-    availabilityFromUrl === 'on-offer' ? ['on-offer'] : []
+    initialState.initialAvailability
   );
 
   // Initialize featuredFilter state based on URL parameter
   const [featuredFilter, setFeaturedFilter] = useState<boolean>(
-    filterFromUrl === 'featured'
+    initialState.initialFeatured
   );
 
-  const [sortOrder, setSortOrder] = useState<string>('relevance');
+  const [sortOrder, setSortOrder] = useState<string>(
+    initialState.initialSortOrder
+  );
 
-  // <<--- Add useEffect for logging URL param and initial state (for debugging)
+  const [favoriteIds, setFavoriteIds] = useState<string[]>([]);
+  const [loadingFavorites, setLoadingFavorites] = useState(false);
+
+  // Effect to update URL when filters change
   useEffect(() => {
-    console.log('ProductosPage mounted');
-    console.log('URL filter param:', filterFromUrl);
-    console.log('Initial featuredFilter state:', featuredFilter);
-  }, [filterFromUrl, featuredFilter]); // Add dependencies to see updates
+    const params = new URLSearchParams(searchParams.toString());
 
+    if (selectedCategories.length > 0) {
+      params.set('categorias', selectedCategories.join(','));
+    } else {
+      params.delete('categorias');
+    }
+
+    if (availabilityFilters.length > 0) {
+      params.set('disponibilidad', availabilityFilters.join(','));
+    } else {
+      params.delete('disponibilidad');
+    }
+
+    if (featuredFilter) {
+      params.set('filtro', 'destacados');
+    } else {
+      params.delete('filtro');
+    }
+
+    if (minRating > 0) {
+      params.set('valoracion', minRating.toString());
+    } else {
+      params.delete('valoracion');
+    }
+
+    if (priceRange[0] !== 0 || priceRange[1] !== 1000) {
+       params.set('precio_min', priceRange[0].toString());
+       params.set('precio_max', priceRange[1].toString());
+    } else {
+       params.delete('precio_min');
+       params.delete('precio_max');
+    }
+
+    if (selectedBrands.length > 0) {
+      params.set('marcas', selectedBrands.join(','));
+    } else {
+      params.delete('marcas');
+    }
+
+    if (sortOrder !== 'relevance') {
+      params.set('orden', sortOrder);
+    } else {
+      params.delete('orden');
+    }
+
+    router.push(`?${params.toString()}`, { scroll: false });
+  }, [selectedCategories, availabilityFilters, featuredFilter, minRating, priceRange, selectedBrands, sortOrder, router, searchParams]);
 
   // Función para cargar categorías
   const fetchCategories = useCallback(async () => {
-    const { data, error } = await supabase.from("categorias").select("id, nombre, slug").order('orden', { ascending: true });
+    // Select all necessary fields to match the Categoria type
+    const { data, error } = await supabase.from("categorias").select("id, nombre, slug, imagen_url").order('orden', { ascending: true });
     if (error) console.error("Error loading categories:", error); else setCategories(data || []);
   }, []);
 
   // Función para cargar marcas disponibles (únicas)
   const fetchBrands = useCallback(async () => {
-    const { data, error } = await supabase.from("productos").select("marca", { distinct: true }).not('marca', 'is', null);
+    // Use a simple query and process distinct brands in the frontend
+    const { data, error } = await supabase.from("productos").select("marca").not('marca', 'is', null) as { data: BrandData[] | null, error: any };
     if (error) {
       console.error("Error loading brands:", error);
     } else {
-      setBrands(data?.map(item => item.marca!) || []);
+      // Explicitly type the item in the map callback and filter out nulls
+      setBrands(data?.map((item: BrandData) => item.marca).filter((marca): marca is string => marca !== null).filter((value, index, self) => self.indexOf(value) === index) || []);
     }
   }, []);
 
@@ -130,7 +219,7 @@ export default function ProductosPage() {
       console.error("Error loading products from RPC:", error);
       setProducts([]);
     } else {
-       const productIds = data?.map(item => item.id) || [];
+       const productIds = data?.map((item: ProductRpc) => item.id) || [];
        let productsWithImages: ProductForFrontend[] = [];
 
        if (productIds.length > 0) {
@@ -143,7 +232,8 @@ export default function ProductosPage() {
              console.error("Error fetching product images:", imagesError);
           } else {
              productsWithImages = data.map((productRpc: ProductRpc) => {
-                const productImages = imagesData?.filter(img => img.producto_id === productRpc.id) || [];
+                // Explicitly type the item in the filter callback
+                const productImages = imagesData?.filter((img: { producto_id: string }) => img.producto_id === productRpc.id) || [];
                  const mainImage = productImages.find(img => img.es_principal) || productImages[0];
                  const imageUrl = mainImage?.url || '/placeholder.jpg';
 
@@ -158,14 +248,38 @@ export default function ProductosPage() {
                    nuevo: productRpc.nuevo,
                    rating: productRpc.valoracion_promedio,
                    imagenes_producto: productImages,
-                };
+                   descripcion: productRpc.descripcion,
+                   sku: productRpc.sku,
+                   porcentaje_descuento: productRpc.porcentaje_descuento,
+                   created_at: productRpc.created_at,
+                   updated_at: productRpc.updated_at,
+                   metadata: productRpc.metadata,
+                   categoria_id: productRpc.categoria_id
+                } as ProductForFrontend;
              });
           }
        }
         setProducts(productsWithImages);
+
+        // Calculate max price and set slider max value
+        const maxPrice = data ? Math.max(...data.map((p: ProductRpc) => p.precio)) : 1000;
+        setPriceRangeMax(maxPrice);
+
     }
     setLoading(false);
-  }, [selectedCategories, priceRange, selectedBrands, minRating, availabilityFilters, sortOrder, featuredFilter]); // Add featuredFilter to dependencies
+  }, [selectedCategories, priceRange, selectedBrands, minRating, availabilityFilters, sortOrder, featuredFilter]);
+
+  // State for dynamic price range max
+  const [priceRangeMax, setPriceRangeMax] = useState<number>(1000);
+
+  // Use initial price range from URL, but respect the dynamically set max
+  useEffect(() => {
+    const initialState = getInitialStateFromUrl();
+    setPriceRange([
+        Math.max(0, Math.min(initialState.initialPriceRange[0], priceRangeMax)), // Ensure min is within bounds
+        Math.max(0, Math.min(initialState.initialPriceRange[1], priceRangeMax))  // Ensure max is within bounds
+    ]);
+  }, [priceRangeMax]); // Re-evaluate initial range when max changes
 
   // Efectos para cargar datos iniciales y refetching al cambiar filtros/orden
   useEffect(() => {
@@ -176,6 +290,43 @@ export default function ProductosPage() {
    useEffect(() => {
     fetchProducts();
   }, [fetchProducts]);
+
+  // Cargar favoritos del usuario autenticado
+  useEffect(() => {
+    if (!user) {
+      setFavoriteIds([]);
+      return;
+    }
+    setLoadingFavorites(true);
+    supabase
+      .from("favoritos")
+      .select("producto_id")
+      .eq("usuario_id", user.id)
+      .then(({ data }) => {
+        setFavoriteIds((data || []).map((f: any) => f.producto_id));
+        setLoadingFavorites(false);
+      });
+  }, [user]);
+
+  // Alternar favorito
+  const handleToggleFavorite = async (productId: string) => {
+    if (!user) {
+      router.push("/login");
+      return;
+    }
+    // Llamar a la función RPC toggle_favorite
+    const { data: isNowFavorited, error } = await supabase.rpc('toggle_favorite', {
+      product_id_input: productId,
+      user_id_input: user.id,
+    });
+    if (!error) {
+      setFavoriteIds((prev) =>
+        isNowFavorited
+          ? [...prev, productId]
+          : prev.filter((id) => id !== productId)
+      );
+    }
+  };
 
   // Manejar cambio en los checkboxes de categoría
   const handleCategoryChange = (slug: string, isChecked: boolean) => {
@@ -202,7 +353,12 @@ export default function ProductosPage() {
 
    // Manejar cambio en los checkboxes de valoración
   const handleRatingChange = (rating: number, isChecked: boolean) => {
-    setMinRating(isChecked ? rating : 0);
+    setMinRating(isChecked ? rating : (minRating === rating ? 0 : minRating));
+  };
+
+  // Manejar cambio en el checkbox de Destacados (separado de disponibilidad)
+  const handleFeaturedChange = (isChecked: boolean) => {
+    setFeaturedFilter(isChecked);
   };
 
   // Manejar cambio en los checkboxes de disponibilidad
@@ -311,7 +467,14 @@ export default function ProductosPage() {
               {/* Price Range */}
               <div className="mb-6">
                 <h4 className="font-medium mb-3">Rango de Precio</h4>
-                <Slider defaultValue={[0, 1000]} max={1000} step={1} className="mb-4" value={priceRange} onValueChange={handlePriceRangeChange} />
+                <Slider
+                  defaultValue={[0, priceRangeMax]} // Use dynamic max
+                  max={priceRangeMax} // Set dynamic max
+                  step={1}
+                  className="mb-4"
+                  value={priceRange}
+                  onValueChange={handlePriceRangeChange}
+                />
                 <div className="flex items-center justify-between">
                   <div className="w-20 px-2 py-1 bg-gray-100 rounded text-sm text-center">€{priceRange[0]}</div>
                   <span className="text-sm text-gray-500">hasta</span>
@@ -355,10 +518,10 @@ export default function ProductosPage() {
                        <label htmlFor={`rating-${ratingValue}`} className="ml-2 text-sm flex items-center">
                          <div className="flex">
                            {[...Array(5)].map((_, i) => (
-                             <Star key={i} className="w-4 h-4 text-yellow-400 fill-yellow-400" />
-                           ))}
-                           {[...Array(5 - ratingValue)].map((_, i) => (
-                              <Star key={i + ratingValue} className="w-4 h-4 text-gray-300" fill="currentColor" />
+                             <Star
+                               key={i}
+                               className={`w-4 h-4 ${i < ratingValue ? "text-yellow-400 fill-yellow-400" : "text-gray-300 fill-gray-300"}`}
+                             />
                            ))}
                          </div>
                           {ratingValue < 5 && <span className="ml-1">y más</span>}
@@ -397,7 +560,7 @@ export default function ProductosPage() {
                     <Checkbox
                       id="filter-featured"
                       checked={featuredFilter}
-                      onCheckedChange={(isChecked: boolean) => setFeaturedFilter(isChecked)}
+                      onCheckedChange={(isChecked: boolean) => handleFeaturedChange(isChecked)}
                     />
                     <label htmlFor="filter-featured" className="ml-2 text-sm">
                       Destacados
@@ -429,8 +592,12 @@ export default function ProductosPage() {
                         name={product.nombre}
                         price={product.precio}
                         image={imageUrl}
-                        rating={product.rating} // Usar la valoración promedio real obtenida de la RPC
-                        discount={product.porcentaje_descuento ? Math.round(((product.precio - product.precio_descuento) / product.precio) * 100) : undefined}
+                        rating={product.rating}
+                        precio_descuento={product.precio_descuento}
+                        porcentaje_descuento={product.porcentaje_descuento}
+                        stock={product.stock}
+                        isFavorited={favoriteIds.includes(product.id)}
+                        onToggleFavorite={handleToggleFavorite}
                       />
                     );
                   })

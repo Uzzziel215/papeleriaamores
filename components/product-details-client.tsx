@@ -9,6 +9,7 @@ import { useRouter } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
 import { useToast } from "@/components/ui/use-toast";
 import { useCart } from '@/contexts/CartContext';
+import { useFavoritos } from "@/contexts/FavoritosContext";
 
 interface ProductImage {
   id: string;
@@ -71,7 +72,6 @@ export function ProductDetailsClient({ product, reviews }: ProductDetailProps) {
    const [selectedVariants, setSelectedVariants] = useState<Record<string, string>>({});
    const [quantity, setQuantity] = useState<number>(1);
    const [mainImageUrl, setMainImageUrl] = useState<string>(product.imagenes_producto.find(img => img.es_principal)?.url || product.imagenes_producto[0]?.url || '/placeholder.jpg');
-   const [isFavorited, setIsFavorited] = useState<boolean>(product.is_favorited_by_user || false);
    const [isTogglingFavorite, setIsTogglingFavorite] = useState(false);
 
    const router = useRouter();
@@ -81,6 +81,7 @@ export function ProductDetailsClient({ product, reviews }: ProductDetailProps) {
    const [isLoadingAuth, setIsLoadingAuth] = useState(true);
 
    const { addItem } = useCart();
+   const { isFavorited: globalIsFavorited, toggleFavorite } = useFavoritos();
 
    useEffect(() => {
        const getUser = async () => {
@@ -120,64 +121,6 @@ export function ProductDetailsClient({ product, reviews }: ProductDetailProps) {
           description: `${quantity} x ${product.nombre} ha(n) sido añadido(s) al carrito.`, 
           variant: "default",
         });
-   };
-
-   const handleAddToFavorites = async () => {
-       console.log('Add to favorites clicked!', { productId: product.id });
-
-       if (isLoadingAuth) {
-          console.log('Auth state loading...');
-           return;
-       }
-
-       if (!user) {
-           console.log('User not authenticated. Redirecting to login.');
-            toast({
-              title: "Inicia sesión para añadir a favoritos",
-              description: "Serás redirigido a la página de inicio de sesión.",
-              variant: "default",
-            });
-           router.push('/login');
-           return;
-       }
-
-       setIsTogglingFavorite(true);
-       console.log('User authenticated. Calling toggle_favorite RPC...', { userId: user.id, productId: product.id });
-
-       try {
-         const { data: isNowFavorited, error } = await supabase.rpc('toggle_favorite', {
-           product_id_input: product.id,
-           user_id_input: user.id,
-         });
-
-         if (error) {
-           console.error('Error calling toggle_favorite RPC:', error);
-           toast({
-             title: "Error al actualizar favoritos",
-             description: error.message || "No se pudo actualizar el estado de favoritos.",
-             variant: "destructive",
-           });
-         } else {
-            console.log('Favorite toggled successfully. New state:', isNowFavorited);
-            setIsFavorited(isNowFavorited);
-
-            toast({
-              title: isNowFavorited ? "Añadido a Favoritos" : "Eliminado de Favoritos",
-              description: isNowFavorited ? `${product.nombre} ha sido añadido a tus favoritos.` : `${product.nombre} ha sido eliminado de tus favoritos.`, 
-              variant: "default",
-            });
-         }
-
-       } catch (error: any) {
-         console.error('Unexpected error toggling favorite:', error);
-          toast({
-             title: "Error Inesperado",
-             description: error.message || "Ocurrió un error al procesar tu solicitud.",
-             variant: "destructive",
-           });
-       } finally {
-         setIsTogglingFavorite(false);
-       }
    };
 
    const selectedVariant = product.variantes_producto.find(v => v.id === Object.values(selectedVariants)[0]);
@@ -310,15 +253,15 @@ export function ProductDetailsClient({ product, reviews }: ProductDetailProps) {
           <Button
              variant="outline"
              className={
-                isFavorited
+                globalIsFavorited(product.id)
                    ? "w-full border-[#ff6b6b] bg-[#ff6b6b] text-white hover:bg-[#e05a5a] hover:border-[#e05a6a]"
                    : "w-full border-[#ff6b6b] text-[#ff6b6b] hover:bg-[#ff6b6b] hover:text-white"
              }
-             onClick={handleAddToFavorites}
+             onClick={() => toggleFavorite(product.id)}
              disabled={isLoadingAuth || isTogglingFavorite}
           >
-            <Heart className={`h-5 w-5 mr-2 ${isFavorited ? 'fill-current' : ''}`} />
-            {isTogglingFavorite ? (isFavorited ? 'Eliminando...' : 'Añadiendo...') : (isFavorited ? 'En Favoritos' : 'Añadir a Favoritos')}
+            <Heart className={`h-5 w-5 mr-2 ${globalIsFavorited(product.id) ? 'fill-current' : ''}`} />
+            {globalIsFavorited(product.id) ? 'En Favoritos' : 'Añadir a Favoritos'}
           </Button>
         </div>
 

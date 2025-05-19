@@ -122,11 +122,25 @@ export function Footer() {
           </div>
         </div>
         
+        {/* Payment Methods */}
+        <div className="border-t border-gray-800 pt-8 mb-8">
+          <h3 className="text-lg font-semibold mb-4">Métodos de Pago Aceptados</h3>
+          <div className="flex space-x-4">
+            <Image src="/icons/1.png" alt="Visa" width={50} height={30} className="object-contain" />
+            <Image src="/icons/4.png" alt="Mastercard" width={50} height={30} className="object-contain" />
+            <Image src="/icons/2.png" alt="Paypal" width={50} height={30} className="object-contain" />
+          </div>
+        </div>
+
         {/* Newsletter */}
         <div className="border-t border-gray-800 pt-8 pb-6 mb-6">
           <div className="flex flex-col md:flex-row items-center justify-between">
             <div className="mb-4 md:mb-0">
               <h3 className="text-lg font-semibold mb-2">Suscríbete a Nuestra Newsletter</h3>
             </div>
-
-\
+          </div>
+        </div>
+      </div>
+    </footer>
+  )
+}
