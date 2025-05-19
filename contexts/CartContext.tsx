@@ -115,7 +115,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
             console.log("initCart: currentSessionId:", currentSessionId);
             console.log("initCart: insertData:", insertData);
 
-            // *** Add logging for the client\'s perceived auth state ***
+            // *** Add logging for the client's perceived auth state ***
             try {
               const clientSession = await supabase.auth.getSession();
               const clientUser = await supabase.auth.getUser(); // This call might still throw AuthSessionMissingError internally
@@ -129,7 +129,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
             console.log("initCart: --- DEBUG: Attempting insert --- ");
 
-            // Use the single \'supabase\' client for this insert
+            // Use the single 'supabase' client for this insert
             // This INSERT relies on the allow_anon_create_cart RLS policy
             const { data: newAnonCart, error: createAnonError } = await supabase
               .from("carritos")
@@ -283,7 +283,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
 
                if(anonCartToConvert) {
                   console.log("initCart: Converting anonymous cart to user cart:", anonCartToConvert);
-                  // Update the anonymous cart row with the user\'s ID
+                  // Update the anonymous cart row with the user's ID
                    const { error: updateCartError } = await supabase
                      .from("carritos")
                      .update({ usuario_id: user?.id, session_id: null }) // Use user?.id from useAuth
@@ -391,7 +391,7 @@ export function CartProvider({ children }: { children: React.ReactNode }) {
           producto_id,
           variante_id,
           cantidad,
-          productos:producto_id (*),
+          productos (imagen_url),
           variantes:variante_id (*)
         `
         )

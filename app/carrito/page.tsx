@@ -63,7 +63,7 @@ export default function CarritoPage() {
                 <div className="flex items-center">
                   <div className="w-20 h-20 relative flex-shrink-0">
                     <Image
-                      src={item.producto?.imagen_url || "/placeholder.svg?height=80&width=80"}
+                      src={item.producto?.imagen_url || "/placeholder.svg"}
                       alt={item.producto?.nombre || "Producto"}
                       fill
                       className="object-contain"
