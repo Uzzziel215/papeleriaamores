@@ -270,7 +270,7 @@ export default function CheckoutPage() {
                         </div>
                       </Label>
                     </div>
-                    <span className="font-medium">€4.99</span>
+                    <span className="font-medium">$4.99</span>
                   </div>
 
                   <div className="flex items-center justify-between border border-gray-200 rounded-md p-4 mb-3">
@@ -283,7 +283,7 @@ export default function CheckoutPage() {
                         </div>
                       </Label>
                     </div>
-                    <span className="font-medium">€9.99</span>
+                    <span className="font-medium">$9.99</span>
                   </div>
 
                   <div className="flex items-center justify-between border border-gray-200 rounded-md p-4">
@@ -433,7 +433,7 @@ export default function CheckoutPage() {
                           </div>
                           {/* Display item price (product price + variant price if applicable) */}
                           <div className="text-sm font-medium mt-1">
-                            €{((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad.toFixed(2)}
+                            ${((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad.toFixed(2)}
                           </div>
                         </div>
                       </div>
@@ -448,16 +448,16 @@ export default function CheckoutPage() {
                     {/* Update item count dynamically */}
                     <span className="text-gray-600">Subtotal ({items.reduce((sum, item) => sum + item.cantidad, 0)} items)</span>
                     {/* Placeholder total - replace with calculated value */}
-                    <span>€{items.reduce((sum, item) => sum + ((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad, 0).toFixed(2)}</span>
+                    <span>${items.reduce((sum, item) => sum + ((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * item.cantidad, 0).toFixed(2)}</span>
                   </div>
                   {/* Placeholder for Discount and Shipping - replace with actual calculations */}
                   <div className="flex justify-between">
                     <span className="text-gray-600">Descuento</span>
-                    <span className="text-green-600">-€0.00</span>
+                    <span className="text-green-600">-$0.00</span>
                   </div>
                   <div className="flex justify-between">
                     <span className="text-gray-600">Envío</span>
-                    <span>€0.00</span>
+                    <span>$0.00</span>
                   </div>
                 </div>
 
@@ -465,7 +465,7 @@ export default function CheckoutPage() {
                   <div className="flex justify-between font-semibold text-lg">
                     <span>Total</span>
                      {/* Placeholder total - replace with calculated value */} 
-                    <span>€{items.reduce((sum, item) => sum + (((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * Number(item.cantidad)), 0).toFixed(2)}</span>
+                    <span>${items.reduce((sum, item) => sum + (((item.producto?.precio || 0) + (item.variante?.precio_adicional || 0)) * Number(item.cantidad)), 0).toFixed(2)}</span>
                   </div>
                   {/* Placeholder savings */}
                   {/* <div className="text-green-600 text-sm text-right">Ahorras €0.00</div> */}

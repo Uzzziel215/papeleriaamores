@@ -15,7 +15,7 @@ export default function CarritoPage() {
     return total + precio * item.cantidad
   }, 0)
 
-  // Calcular envío (gratis si el subtotal es mayor a 30€)
+  // Calcular envío (gratis si el subtotal es mayor a $30)
   const envio = subtotal > 30 ? 0 : 4.99
 
   // Calcular total
@@ -63,7 +63,7 @@ export default function CarritoPage() {
                 <div className="flex items-center">
                   <div className="w-20 h-20 relative flex-shrink-0">
                     <Image
-                      src={item.producto?.imagen_url || "/placeholder.svg"}
+                      src={item.producto?.imagenes_producto?.[0]?.url || "/placeholder.svg"}
                       alt={item.producto?.nombre || "Producto"}
                       fill
                       className="object-contain"
@@ -95,14 +95,14 @@ export default function CarritoPage() {
 
                         <div className="text-right">
                           <div className="font-medium">
-                            €
+                            $
                             {((item.producto?.precio_descuento || item.producto?.precio || 0) * item.cantidad).toFixed(
                               2,
                             )}
                           </div>
                           {item.producto?.precio_descuento && (
                             <div className="text-sm text-gray-500 line-through">
-                              €{(item.producto.precio * item.cantidad).toFixed(2)}
+                              ${(item.producto.precio * item.cantidad).toFixed(2)}
                             </div>
                           )}
                         </div>
@@ -145,18 +145,18 @@ export default function CarritoPage() {
               <div className="space-y-3 mb-6">
                 <div className="flex justify-between">
                   <span className="text-gray-600">Subtotal ({items.length} productos)</span>
-                  <span>€{subtotal.toFixed(2)}</span>
+                  <span>${subtotal.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between">
                   <span className="text-gray-600">Envío</span>
-                  {envio === 0 ? <span className="text-green-600">Gratis</span> : <span>€{envio.toFixed(2)}</span>}
+                  {envio === 0 ? <span className="text-green-600">Gratis</span> : <span>${envio.toFixed(2)}</span>}
                 </div>
               </div>
 
               <div className="border-t border-gray-100 pt-4 mb-6">
                 <div className="flex justify-between font-semibold text-lg">
                   <span>Total</span>
-                  <span>€{total.toFixed(2)}</span>
+                  <span>${total.toFixed(2)}</span>
                 </div>
                 {envio === 0 && <div className="text-green-600 text-sm text-right">Envío gratis</div>}
               </div>
@@ -169,7 +169,9 @@ export default function CarritoPage() {
               </Link>
 
               <div className="text-center text-sm text-gray-500">
-                <p>Envío gratis en pedidos superiores a €30</p>
+                <p>
+                  Envío gratis en pedidos superiores a $30
+                </p>
               </div>
             </div>
           </div>

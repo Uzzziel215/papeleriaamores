@@ -62,8 +62,8 @@ export function ProductCard({ id, name, price, discountPrice, imageUrl }: Produc
 
         <div className="flex items-center justify-between">
           <div>
-            <span className="font-semibold text-[#0084cc]">€{(discountPrice || price).toFixed(2)}</span>
-            {discountPrice && <span className="ml-2 text-sm text-gray-400 line-through">€{price.toFixed(2)}</span>}
+            <span className="font-semibold text-[#0084cc]">${(discountPrice || price).toFixed(2)}</span>
+            {discountPrice && <span className="ml-2 text-sm text-gray-400 line-through">${price.toFixed(2)}</span>}
           </div>
 
           <Button

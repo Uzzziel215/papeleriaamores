@@ -70,9 +70,9 @@ export function ProductCard({ id, name, price, image, rating, precio_descuento, 
           ))}
         </div>
         <div className="flex items-center space-x-2 mb-2">
-          <span className="text-xl font-bold text-[#0084cc]">€{displayedPrice}</span>
+          <span className="text-xl font-bold text-[#0084cc]">${displayedPrice}</span>
           {precio_descuento !== null && precio_descuento !== undefined && (
-            <span className="text-sm line-through text-gray-400">€{price}</span>
+            <span className="text-sm line-through text-gray-400">${price}</span>
           )}
         </div>
         <div className="flex items-center justify-between">
